@@ -1,0 +1,210 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://island-energy.example/schemas/component.schema.json",
+  "title": "Energy system component",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "manufacturer",
+    "model",
+    "name",
+    "category",
+    "roles",
+    "description",
+    "electrical",
+    "operation",
+    "sources",
+    "notes",
+    "dataQuality"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "manufacturer": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "category": { "enum": ["generator", "consumer", "storage", "converter"] },
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["generator", "consumer", "storage", "converter"] }
+    },
+    "description": { "type": "string" },
+    "generatorType": { "type": "string" },
+    "consumerType": { "type": "string" },
+    "storageType": { "type": "string" },
+    "converterType": { "type": "string" },
+    "chemistry": { "type": "string" },
+    "electrical": { "$ref": "#/$defs/electrical" },
+    "operation": {
+      "type": "object",
+      "properties": {
+        "typicalDailyEnergyWh": { "$ref": "#/$defs/nullablePositive" },
+        "energyPerCycleWh": { "$ref": "#/$defs/nullablePositive" },
+        "maximumDepthOfDischargePercent": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "chargeEfficiency": { "$ref": "#/$defs/efficiency" },
+        "dischargeEfficiency": { "$ref": "#/$defs/efficiency" },
+        "selfDischargePercentPerMonth": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "productionProfile": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "enum": ["user_defined", "solar", "constant"] },
+            "capacityFactorPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "dataQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "confidence"],
+      "properties": {
+        "level": {
+          "enum": [
+            "manufacturer_specification",
+            "independently_measured",
+            "estimated",
+            "demonstration"
+          ]
+        },
+        "confidence": { "enum": ["high", "medium", "low"] }
+      }
+    }
+  },
+  "$defs": {
+    "nullablePositive": { "type": ["number", "null"], "minimum": 0 },
+    "efficiency": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "source": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "title", "url", "accessed"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": {
+          "enum": [
+            "manufacturer_datasheet",
+            "manufacturer_product_page",
+            "official_manual",
+            "certification_document",
+            "scientific_publication",
+            "measurement",
+            "reference"
+          ]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "accessed": { "type": "string", "format": "date" },
+        "page": { "type": ["integer", "null"], "minimum": 1 },
+        "notes": { "type": "string" }
+      }
+    },
+    "port": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["ac", "dc"] },
+        "nominalVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "minimumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "frequencyHz": { "$ref": "#/$defs/nullablePositive" },
+        "continuousPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "peakPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "peakDurationSeconds": { "$ref": "#/$defs/nullablePositive" }
+      }
+    },
+    "electrical": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ratedPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "nominalVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "minimumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "openCircuitVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumPowerVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "ratedCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "shortCircuitCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "maximumPowerCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "nominalCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "continuousPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "startupPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "startupDurationSeconds": { "$ref": "#/$defs/nullablePositive" },
+        "standbyPowerW": { "$ref": "#/$defs/nullablePositive" },
+        "frequencyHz": { "$ref": "#/$defs/nullablePositive" },
+        "powerFactor": { "$ref": "#/$defs/efficiency" },
+        "inputType": { "enum": ["ac", "dc"] },
+        "outputType": { "enum": ["ac", "dc"] },
+        "nominalCapacityAh": { "$ref": "#/$defs/nullablePositive" },
+        "nominalCapacityWh": { "$ref": "#/$defs/nullablePositive" },
+        "usableCapacityWh": { "$ref": "#/$defs/nullablePositive" },
+        "maximumChargeCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "maximumContinuousDischargeCurrentA": {
+          "$ref": "#/$defs/nullablePositive"
+        },
+        "maximumPeakDischargeCurrentA": { "$ref": "#/$defs/nullablePositive" },
+        "maximumPeakDischargeDurationSeconds": {
+          "$ref": "#/$defs/nullablePositive"
+        },
+        "maximumChargePowerW": { "$ref": "#/$defs/nullablePositive" },
+        "maximumContinuousDischargePowerW": {
+          "$ref": "#/$defs/nullablePositive"
+        },
+        "input": { "$ref": "#/$defs/port" },
+        "output": { "$ref": "#/$defs/port" },
+        "efficiency": {
+          "type": "object",
+          "properties": {
+            "nominal": { "$ref": "#/$defs/efficiency" },
+            "curve": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["loadPercent", "efficiency"],
+                "properties": {
+                  "loadPercent": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "efficiency": {
+                    "type": "number",
+                    "exclusiveMinimum": 0,
+                    "maximum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "mpptMinimumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "mpptMaximumVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumPvVoltageV": { "$ref": "#/$defs/nullablePositive" },
+        "maximumPvCurrentA": { "$ref": "#/$defs/nullablePositive" }
+      }
+    }
+  }
+}

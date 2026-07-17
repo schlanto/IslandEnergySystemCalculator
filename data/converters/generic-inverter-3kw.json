@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-dc-ac-inverter-48v-3kw",
+  "manufacturer": "Generic",
+  "model": "Reference inverter 48/3000",
+  "name": "Demonstration 3 kW inverter",
+  "category": "converter",
+  "roles": ["converter"],
+  "converterType": "dc_ac_inverter",
+  "description": "Generic 48 V DC to 230 V AC inverter.",
+  "electrical": {
+    "input": {
+      "type": "dc",
+      "nominalVoltageV": 48,
+      "minimumVoltageV": 42,
+      "maximumVoltageV": 60,
+      "maximumCurrentA": 80
+    },
+    "output": {
+      "type": "ac",
+      "nominalVoltageV": 230,
+      "frequencyHz": 50,
+      "continuousPowerW": 3000,
+      "peakPowerW": 6000,
+      "peakDurationSeconds": 3
+    },
+    "efficiency": {
+      "nominal": 0.93,
+      "curve": [
+        { "loadPercent": 10, "efficiency": 0.84 },
+        { "loadPercent": 50, "efficiency": 0.94 },
+        { "loadPercent": 100, "efficiency": 0.92 }
+      ]
+    },
+    "standbyPowerW": 12
+  },
+  "operation": {},
+  "sources": [
+    {
+      "type": "reference",
+      "title": "ENERGY STAR Power Electronics Efficiency Concepts",
+      "url": "https://www.energystar.gov/products",
+      "accessed": "2026-07-16",
+      "notes": "General efficiency reference; device ratings are demonstration assumptions."
+    }
+  ],
+  "notes": ["Demonstration data."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

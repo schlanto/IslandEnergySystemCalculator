@@ -1,0 +1,126 @@
+name: Add a component
+description: Propose a source-backed device for the public component catalogue.
+title: "[Component]: "
+labels: ["component submission", "needs review"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for contributing. Unknown values must be left empty, never guessed. At least one source URL is mandatory.
+  - type: dropdown
+    id: role
+    attributes:
+      label: Component role
+      options: [generator, consumer, storage, converter]
+    validations: { required: true }
+  - type: input
+    id: subtype
+    attributes:
+      label: Component subtype
+      description: For example refrigerator, pv, battery, or dc_ac_inverter.
+    validations: { required: true }
+  - type: input
+    id: manufacturer
+    attributes: { label: Manufacturer }
+    validations: { required: true }
+  - type: input
+    id: model
+    attributes: { label: Model }
+    validations: { required: true }
+  - type: input
+    id: name
+    attributes: { label: Readable name }
+    validations: { required: true }
+  - type: textarea
+    id: description
+    attributes: { label: Description }
+  - type: markdown
+    attributes: { value: "## Source" }
+  - type: dropdown
+    id: source_type
+    attributes:
+      label: Source type
+      options: [manufacturer_datasheet, manufacturer_product_page, official_manual, certification_document, scientific_publication, measurement]
+    validations: { required: true }
+  - type: input
+    id: source_title
+    attributes: { label: Source title }
+    validations: { required: true }
+  - type: input
+    id: source_url
+    attributes: { label: Source URL, placeholder: "https://…" }
+    validations: { required: true }
+  - type: input
+    id: source_page
+    attributes: { label: Page number }
+  - type: input
+    id: accessed
+    attributes: { label: Date accessed, placeholder: "YYYY-MM-DD" }
+    validations: { required: true }
+  - type: textarea
+    id: source_notes
+    attributes: { label: Source notes }
+  - type: markdown
+    attributes:
+      value: |
+        ## General electrical information
+        Enter a number and unit. Leave unknown values empty.
+  - type: input
+    id: voltage
+    attributes: { label: Nominal voltage }
+  - type: input
+    id: current
+    attributes: { label: Nominal current }
+  - type: input
+    id: rated_power
+    attributes: { label: Rated power }
+  - type: input
+    id: continuous_power
+    attributes: { label: Continuous power }
+  - type: input
+    id: peak_power
+    attributes: { label: Startup / peak power }
+  - type: input
+    id: peak_duration
+    attributes: { label: Startup / peak duration }
+  - type: input
+    id: current_type
+    attributes: { label: AC or DC }
+  - type: input
+    id: frequency
+    attributes: { label: Frequency }
+  - type: textarea
+    id: consumer
+    attributes:
+      label: Consumer-specific values
+      description: Standby power, daily energy, energy/cycle, runtime, power factor.
+  - type: textarea
+    id: generator
+    attributes:
+      label: Generator-specific values
+      description: Open-circuit voltage, short-circuit current, generator type, power curve.
+  - type: textarea
+    id: storage
+    attributes:
+      label: Storage-specific values
+      description: Chemistry, min/max voltage, nominal/usable capacity, charge/discharge and peak limits, efficiencies.
+  - type: textarea
+    id: converter
+    attributes:
+      label: Converter-specific values
+      description: Type, input range/current, output voltage/current, power limits, efficiency, standby, MPPT range.
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Final confirmation
+      options:
+        - label: I provided at least one source that is publicly accessible where possible.
+          required: true
+        - label: I checked the values and units.
+          required: true
+        - label: Unknown values were left empty instead of guessed.
+          required: true
+        - label: I understand that the data will be publicly visible and contains no confidential information.
+          required: true
+        - label: I agree that the contribution may be edited during review.
+          required: true

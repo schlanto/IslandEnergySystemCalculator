@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-pv-module-450w",
+  "manufacturer": "Generic",
+  "model": "Reference PV 450 W",
+  "name": "Demonstration 450 W PV module",
+  "category": "generator",
+  "roles": ["generator"],
+  "generatorType": "pv",
+  "description": "Generic PV module for demonstrating compatibility checks.",
+  "electrical": {
+    "ratedPowerW": 450,
+    "nominalVoltageV": 41.5,
+    "maximumPowerVoltageV": 41.5,
+    "openCircuitVoltageV": 49.8,
+    "ratedCurrentA": 10.85,
+    "maximumPowerCurrentA": 10.85,
+    "shortCircuitCurrentA": 11.4,
+    "outputType": "dc"
+  },
+  "operation": {
+    "productionProfile": { "type": "solar", "capacityFactorPercent": 22 }
+  },
+  "sources": [
+    {
+      "type": "reference",
+      "title": "NREL PVWatts Documentation",
+      "url": "https://pvwatts.nrel.gov/",
+      "accessed": "2026-07-16",
+      "notes": "Solar profile reference; module ratings are demonstration assumptions."
+    }
+  ],
+  "notes": ["Demonstration data, not a manufacturer product."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

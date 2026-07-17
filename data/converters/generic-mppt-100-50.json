@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-mppt-100-50",
+  "manufacturer": "Generic",
+  "model": "Reference MPPT 100/50",
+  "name": "Demonstration MPPT charge controller",
+  "category": "converter",
+  "roles": ["converter"],
+  "converterType": "mppt_charge_controller",
+  "description": "Generic PV charge controller.",
+  "electrical": {
+    "input": {
+      "type": "dc",
+      "minimumVoltageV": 15,
+      "maximumVoltageV": 100,
+      "maximumCurrentA": 20
+    },
+    "output": {
+      "type": "dc",
+      "nominalVoltageV": 48,
+      "maximumCurrentA": 50,
+      "continuousPowerW": 2400
+    },
+    "maximumPvVoltageV": 100,
+    "maximumPvCurrentA": 20,
+    "mpptMinimumVoltageV": 40,
+    "mpptMaximumVoltageV": 90,
+    "efficiency": { "nominal": 0.97, "curve": [] },
+    "standbyPowerW": 1
+  },
+  "operation": {},
+  "sources": [
+    {
+      "type": "reference",
+      "title": "NREL Power Electronics Research",
+      "url": "https://www.nrel.gov/pv/power-electronics.html",
+      "accessed": "2026-07-16",
+      "notes": "Technology reference; ratings are demonstration assumptions."
+    }
+  ],
+  "notes": ["Demonstration data."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

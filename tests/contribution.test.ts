@@ -1,0 +1,4 @@
+import { describe,expect,it } from 'vitest'
+import { issueToComponent,normalizeComponentId,parseIssueForm } from '../src/contribution/parser'
+const body='### Component role\nconsumer\n\n### Manufacturer\nACME GmbH\n\n### Model\nCool 100 / EU\n\n### Readable name\nACME Cooler\n\n### Source URL\nhttps://example.com/data.pdf'
+describe('issue contribution parsing',()=>{it('normalizes IDs',()=>expect(normalizeComponentId('ACME GmbH','Cool 100 / EU')).toBe('acme-gmbh-cool-100-eu'));it('parses issue headings',()=>expect(parseIssueForm(body).manufacturer).toBe('ACME GmbH'));it('creates sourced components',()=>expect(issueToComponent(body).sources).toHaveLength(1));it('rejects missing required data',()=>expect(()=>issueToComponent('### Component role\nconsumer')).toThrow('Missing required field'))})

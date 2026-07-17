@@ -1,0 +1,33 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-led-light-10w",
+  "manufacturer": "Generic",
+  "model": "Reference LED 10 W",
+  "name": "Demonstration LED light",
+  "category": "consumer",
+  "roles": ["consumer"],
+  "consumerType": "lighting",
+  "description": "Generic demonstration LED load.",
+  "electrical": {
+    "nominalVoltageV": 230,
+    "frequencyHz": 50,
+    "continuousPowerW": 10,
+    "startupPowerW": null,
+    "startupDurationSeconds": null,
+    "standbyPowerW": 0,
+    "powerFactor": 0.9,
+    "inputType": "ac"
+  },
+  "operation": { "typicalDailyEnergyWh": 50 },
+  "sources": [
+    {
+      "type": "reference",
+      "title": "U.S. DOE LED Lighting",
+      "url": "https://www.energy.gov/energysaver/led-lighting",
+      "accessed": "2026-07-16",
+      "notes": "Technology reference; ratings are demonstration assumptions."
+    }
+  ],
+  "notes": ["Demonstration data."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

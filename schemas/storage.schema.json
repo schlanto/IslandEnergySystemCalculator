@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://island-energy.example/schemas/storage.schema.json",
+  "allOf": [
+    { "$ref": "component.schema.json" },
+    {
+      "properties": {
+        "category": { "const": "storage" },
+        "roles": { "contains": { "const": "storage" } }
+      },
+      "required": ["storageType"]
+    }
+  ]
+}

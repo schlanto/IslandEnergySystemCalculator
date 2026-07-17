@@ -1,0 +1,43 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-lifepo4-battery-48v-5kwh",
+  "manufacturer": "Generic",
+  "model": "Reference LiFePO4 48 V 5 kWh",
+  "name": "Demonstration 48 V LiFePO4 battery",
+  "category": "storage",
+  "roles": ["storage"],
+  "storageType": "battery",
+  "chemistry": "LiFePO4",
+  "description": "Generic battery pack for simulation examples.",
+  "electrical": {
+    "nominalVoltageV": 51.2,
+    "minimumVoltageV": 44.8,
+    "maximumVoltageV": 58.4,
+    "nominalCapacityAh": 100,
+    "nominalCapacityWh": 5120,
+    "usableCapacityWh": 4608,
+    "maximumChargeCurrentA": 50,
+    "maximumContinuousDischargeCurrentA": 100,
+    "maximumPeakDischargeCurrentA": 200,
+    "maximumPeakDischargeDurationSeconds": 5,
+    "maximumChargePowerW": 2560,
+    "maximumContinuousDischargePowerW": 5120
+  },
+  "operation": {
+    "maximumDepthOfDischargePercent": 90,
+    "chargeEfficiency": 0.96,
+    "dischargeEfficiency": 0.96,
+    "selfDischargePercentPerMonth": null
+  },
+  "sources": [
+    {
+      "type": "reference",
+      "title": "Battery University: Lithium-ion safety and characteristics",
+      "url": "https://batteryuniversity.com/article/bu-205-types-of-lithium-ion",
+      "accessed": "2026-07-16",
+      "notes": "Chemistry reference; pack values are demonstration assumptions."
+    }
+  ],
+  "notes": ["Demonstration data; temperature and ageing are not modelled."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

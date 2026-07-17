@@ -1,0 +1,35 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-refrigerator-90w",
+  "manufacturer": "Generic",
+  "model": "Reference refrigerator 90 W",
+  "name": "Demonstration refrigerator",
+  "category": "consumer",
+  "roles": ["consumer"],
+  "consumerType": "refrigerator",
+  "description": "Generic demonstration load; not a purchasable product.",
+  "electrical": {
+    "nominalVoltageV": 230,
+    "frequencyHz": 50,
+    "continuousPowerW": 90,
+    "startupPowerW": 700,
+    "startupDurationSeconds": 1.5,
+    "standbyPowerW": null,
+    "powerFactor": 0.8,
+    "inputType": "ac"
+  },
+  "operation": { "typicalDailyEnergyWh": 800 },
+  "sources": [
+    {
+      "type": "reference",
+      "title": "ENERGY STAR Refrigerators",
+      "url": "https://www.energystar.gov/products/refrigerators",
+      "accessed": "2026-07-16",
+      "notes": "Category reference only; electrical values are explicitly demonstration assumptions."
+    }
+  ],
+  "notes": [
+    "Demonstration data; replace with sourced product data for engineering decisions."
+  ],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

@@ -1,0 +1,32 @@
+{
+  "schemaVersion": "1.0",
+  "id": "generic-small-wind-turbine-1kw",
+  "manufacturer": "Generic",
+  "model": "Reference wind turbine 1 kW",
+  "name": "Demonstration small wind turbine",
+  "category": "generator",
+  "roles": ["generator"],
+  "generatorType": "wind",
+  "description": "Simplified constant-profile wind generator for demonstrations.",
+  "electrical": {
+    "ratedPowerW": 1000,
+    "nominalVoltageV": 48,
+    "maximumVoltageV": 60,
+    "ratedCurrentA": 20.8,
+    "outputType": "dc"
+  },
+  "operation": {
+    "productionProfile": { "type": "constant", "capacityFactorPercent": 25 }
+  },
+  "sources": [
+    {
+      "type": "reference",
+      "title": "U.S. DOE Small Wind Guidebook",
+      "url": "https://windexchange.energy.gov/small-wind-guidebook",
+      "accessed": "2026-07-16",
+      "notes": "Technology reference; values are demonstration assumptions."
+    }
+  ],
+  "notes": ["No site wind resource is modelled."],
+  "dataQuality": { "level": "demonstration", "confidence": "low" }
+}

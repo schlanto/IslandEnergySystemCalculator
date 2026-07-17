@@ -1,0 +1,8 @@
+import { describe,expect,it } from 'vitest'
+import { simulate } from '../src/simulation/simulate'
+import type { Component,SystemConfiguration } from '../src/models/types'
+const source={type:'measurement' as const,title:'Test',url:'https://example.com',accessed:'2026-07-16'},dataQuality={level:'independently_measured' as const,confidence:'high' as const}
+const battery:Component={schemaVersion:'1.0',id:'battery',manufacturer:'T',model:'B',name:'Battery',category:'storage',roles:['storage'],storageType:'battery',description:'',electrical:{nominalVoltageV:48,usableCapacityWh:5000,maximumContinuousDischargePowerW:3000,maximumChargePowerW:2000},operation:{chargeEfficiency:.95,dischargeEfficiency:.9},sources:[source],notes:[],dataQuality}
+const load:Component={schemaVersion:'1.0',id:'load',manufacturer:'T',model:'L',name:'Load',category:'consumer',roles:['consumer'],consumerType:'load',description:'',electrical:{continuousPowerW:500,inputType:'dc'},operation:{},sources:[source],notes:[],dataQuality}
+const config:SystemConfiguration={configurationVersion:'1.0',applicationVersion:'test',name:'test',createdAt:'2026-07-16T00:00:00Z',simulation:{durationHours:24,resolutionMinutes:60,initialSocPercent:100,minimumSocPercent:10,maximumSocPercent:100},components:[{instanceId:'b',componentId:'battery',quantity:1,usage:{mode:'always'}},{instanceId:'l',componentId:'load',quantity:1,usage:{mode:'always'}}]}
+describe('simulation',()=>{it('enforces minimum SOC and records unmet load',()=>{const result=simulate(config,[battery,load]);expect(result.totals.minSocPercent).toBeGreaterThanOrEqual(10);expect(result.totals.unmetWh).toBeGreaterThan(0)});it('updates SOC after discharge',()=>expect(simulate(config,[battery,load]).points[0].socPercent).toBeLessThan(100))})
