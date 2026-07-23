@@ -1,96 +1,260 @@
-import type { Component, CompatibilityResult, SelectedComponent } from '../models/types'
+import type {
+  Component,
+  SelectedComponent,
+  SimpleSystemResult,
+} from '../models/types'
 
-export function interpolateEfficiency(curve: { loadPercent: number; efficiency: number }[], loadPercent: number): number | null {
-  if (!curve.length) return null
-  const sorted = [...curve].sort((a, b) => a.loadPercent - b.loadPercent)
-  if (loadPercent <= sorted[0].loadPercent) return sorted[0].efficiency
-  if (loadPercent >= sorted.at(-1)!.loadPercent) return sorted.at(-1)!.efficiency
-  const upperIndex = sorted.findIndex((point) => point.loadPercent >= loadPercent)
-  const lower = sorted[upperIndex - 1]
-  const upper = sorted[upperIndex]
-  const ratio = (loadPercent - lower.loadPercent) / (upper.loadPercent - lower.loadPercent)
-  return lower.efficiency + ratio * (upper.efficiency - lower.efficiency)
+export interface ActiveItem {
+  component: Component
+  selected: SelectedComponent
 }
 
-export function batteryCurrent(powerW: number, voltageV: number, efficiency = 1): number | null {
-  return voltageV > 0 && efficiency > 0 ? powerW / voltageV / efficiency : null
-}
+const total = (
+  items: ActiveItem[],
+  value: (component: Component) => number | null | undefined,
+) =>
+  items.reduce(
+    (sum, item) => sum + (value(item.component) ?? 0) * item.selected.quantity,
+    0,
+  )
 
-export function batteryRuntimeHours(usableCapacityWh: number, loadW: number, efficiency = 1): number | null {
-  return loadW > 0 && usableCapacityWh >= 0 && efficiency > 0 ? (usableCapacityWh * efficiency) / loadW : null
-}
+const percent = (item: ActiveItem) =>
+  Math.min(100, Math.max(0, item.selected.operatingPercent)) / 100
 
-export function continuousLoad(items: { component: Component; selected: SelectedComponent }[]): number {
-  return items.reduce((sum, item) => sum + (item.component.electrical.continuousPowerW ?? 0) * item.selected.quantity, 0)
-}
+export function calculateSimpleSystem(
+  allItems: ActiveItem[],
+): SimpleSystemResult {
+  const items = allItems.filter((item) => item.selected.enabled)
+  const consumers = items.filter((item) =>
+    item.component.roles.includes('consumer'),
+  )
+  const generators = items.filter((item) =>
+    item.component.roles.includes('generator'),
+  )
+  const batteries = items.filter((item) =>
+    item.component.roles.includes('storage'),
+  )
+  const inverters = items.filter(
+    (item) => item.component.converterType === 'dc_ac_inverter',
+  )
 
-export function startupLoad(items: { component: Component; selected: SelectedComponent }[]): number {
-  const base = continuousLoad(items)
-  return items.reduce((maximum, item) => {
-    const continuous = item.component.electrical.continuousPowerW
-    const startup = item.component.electrical.startupPowerW
-    if (continuous == null || startup == null) return maximum
-    return Math.max(maximum, base - continuous * item.selected.quantity + startup + continuous * Math.max(0, item.selected.quantity - 1))
-  }, base)
-}
+  const averageDemandW = consumers.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.continuousPowerW ?? 0) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
+  const continuousDemandW = total(
+    consumers,
+    (component) => component.electrical.continuousPowerW,
+  )
+  const peakDemandW = total(
+    consumers,
+    (component) =>
+      component.electrical.startupPowerW ??
+      component.electrical.continuousPowerW,
+  )
+  const averageGenerationW = generators.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.ratedPowerW ?? 0) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
+  const maximumGenerationW = total(
+    generators,
+    (component) => component.electrical.ratedPowerW,
+  )
+  const usableBatteryWh = batteries.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.usableCapacityWh ?? 0) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
 
-const result = (status: CompatibilityResult['status'], code: string, message: string, componentIds: string[]): CompatibilityResult => ({ status, code, message, componentIds })
+  const inverterContinuousW = inverters.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.output?.continuousPowerW ?? 0) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
+  const inverterPeakW = inverters.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.output?.peakPowerW ??
+        item.component.electrical.output?.continuousPowerW ??
+        0) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
+  const inverterEfficiency =
+    inverters[0]?.component.electrical.efficiency?.nominal ?? 1
+  const batteryDischargeW = batteries.reduce(
+    (sum, item) =>
+      sum +
+      (item.component.electrical.maximumContinuousDischargePowerW ??
+        (item.component.electrical.maximumContinuousDischargeCurrentA ?? 0) *
+          (item.component.electrical.nominalVoltageV ?? 0)) *
+        item.selected.quantity *
+        percent(item),
+    0,
+  )
+  const batteryEfficiency =
+    batteries[0]?.component.operation.dischargeEfficiency ?? 1
 
-export function checkCompatibility(items: { component: Component; selected: SelectedComponent }[]): CompatibilityResult[] {
-  const consumers = items.filter((item) => item.component.roles.includes('consumer'))
-  const generators = items.filter((item) => item.component.roles.includes('generator'))
-  const storage = items.filter((item) => item.component.roles.includes('storage'))
-  const converters = items.filter((item) => item.component.roles.includes('converter'))
-  const inverter = converters.find((item) => item.component.converterType === 'dc_ac_inverter')
-  const mppt = converters.find((item) => item.component.converterType === 'mppt_charge_controller')
-  const checks: CompatibilityResult[] = []
+  const checks: SimpleSystemResult['checks'] = []
 
-  const acConsumers = consumers.filter((item) => item.component.electrical.inputType === 'ac')
-  if (acConsumers.length && !inverter) checks.push(result('incompatible', 'missing-inverter', 'AC consumers are selected but no DC/AC inverter is present.', acConsumers.map((x) => x.component.id)))
-  if (inverter) {
-    const limit = inverter.component.electrical.output?.continuousPowerW
-    const load = continuousLoad(consumers)
-    checks.push(limit == null ? result('unknown', 'inverter-power-unknown', 'Inverter continuous power is unknown.', [inverter.component.id]) : result(load <= limit ? 'compatible' : 'incompatible', 'inverter-continuous-power', `${load.toFixed(0)} W continuous load versus ${limit.toFixed(0)} W inverter limit.`, [inverter.component.id]))
-    const peak = inverter.component.electrical.output?.peakPowerW
-    const start = startupLoad(consumers)
-    checks.push(peak == null ? result('unknown', 'inverter-peak-unknown', 'Inverter peak power is unknown.', [inverter.component.id]) : result(start <= peak ? 'compatible' : 'incompatible', 'inverter-peak-power', `${start.toFixed(0)} W worst single-device startup versus ${peak.toFixed(0)} W peak limit.`, [inverter.component.id]))
-    const longestStartup = Math.max(0, ...consumers.map((item) => item.component.electrical.startupDurationSeconds ?? 0))
-    const peakDuration = inverter.component.electrical.output?.peakDurationSeconds
-    if (longestStartup > 0) checks.push(peakDuration == null ? result('unknown', 'inverter-peak-duration-unknown', 'Inverter peak duration is unknown.', [inverter.component.id]) : result(longestStartup <= peakDuration ? 'compatible' : 'incompatible', 'inverter-peak-duration', `${longestStartup} s longest startup versus ${peakDuration} s inverter peak capability.`, [inverter.component.id]))
+  if (!consumers.length) {
+    checks.push({
+      status: 'unknown',
+      title: 'No consumers switched on',
+      detail: 'Switch on at least one consumer to calculate a requirement.',
+    })
   }
-  for (const battery of storage) {
-    if (!inverter) break
-    const voltage = battery.component.electrical.nominalVoltageV
-    const input = inverter.component.electrical.input
-    if (voltage == null || input?.minimumVoltageV == null || input.maximumVoltageV == null) checks.push(result('unknown', 'battery-voltage-unknown', 'Battery/inverter voltage compatibility cannot be determined.', [battery.component.id, inverter.component.id]))
-    else checks.push(result(voltage >= input.minimumVoltageV && voltage <= input.maximumVoltageV ? 'compatible' : 'incompatible', 'battery-inverter-voltage', `${voltage} V battery nominal voltage versus ${input.minimumVoltageV}–${input.maximumVoltageV} V inverter input.`, [battery.component.id, inverter.component.id]))
-    const efficiency = inverter.component.electrical.efficiency?.nominal
-    const maximumCurrent = battery.component.electrical.maximumContinuousDischargeCurrentA
-    const requiredCurrent = voltage == null || voltage <= 0 || efficiency == null ? null : continuousLoad(consumers) / voltage / efficiency
-    if (requiredCurrent == null || maximumCurrent == null) checks.push(result('unknown', 'battery-current-unknown', 'Battery continuous discharge current cannot be determined from the available data.', [battery.component.id, inverter.component.id]))
-    else checks.push(result(requiredCurrent <= maximumCurrent ? 'compatible' : 'incompatible', 'battery-discharge-current', `${requiredCurrent.toFixed(1)} A calculated demand versus ${maximumCurrent.toFixed(1)} A battery limit.`, [battery.component.id, inverter.component.id]))
+
+  if (consumers.length && !inverters.length) {
+    checks.push({
+      status: 'no',
+      title: 'No inverter switched on',
+      detail: 'The selected AC consumers need an enabled DC/AC inverter.',
+    })
+  } else if (inverters.length) {
+    checks.push({
+      status:
+        inverterContinuousW >= continuousDemandW && inverterPeakW >= peakDemandW
+          ? 'yes'
+          : 'no',
+      title: 'Inverter power',
+      detail: `${Math.round(continuousDemandW)} W continuous and ${Math.round(peakDemandW)} W peak demand; ${Math.round(inverterContinuousW)} W continuous and ${Math.round(inverterPeakW)} W peak available.`,
+    })
   }
-  for (const consumer of consumers) {
-    if (!inverter) break
-    const loadV = consumer.component.electrical.nominalVoltageV
-    const outputV = inverter.component.electrical.output?.nominalVoltageV
-    if (loadV == null || outputV == null) checks.push(result('unknown', 'consumer-voltage-unknown', `Voltage data is incomplete for ${consumer.component.name}.`, [consumer.component.id]))
-    else checks.push(result(Math.abs(loadV - outputV) / loadV <= 0.05 ? 'compatible' : 'incompatible', 'consumer-voltage', `${consumer.component.name}: ${loadV} V requirement versus ${outputV} V supply.`, [consumer.component.id, inverter.component.id]))
+
+  const requiredSourceW =
+    inverterEfficiency > 0 ? peakDemandW / inverterEfficiency : peakDemandW
+
+  if (batteries.length && batteryDischargeW > 0) {
+    checks.push({
+      status: batteryDischargeW >= requiredSourceW ? 'yes' : 'no',
+      title: 'Battery power',
+      detail: `${Math.round(requiredSourceW)} W estimated peak battery demand; ${Math.round(batteryDischargeW)} W continuous battery output available.`,
+    })
+  } else if (batteries.length) {
+    checks.push({
+      status: 'unknown',
+      title: 'Battery power unknown',
+      detail: 'The selected battery has no usable discharge-power limit.',
+    })
+  } else if (generators.length && maximumGenerationW > 0) {
+    checks.push({
+      status: maximumGenerationW >= requiredSourceW ? 'yes' : 'no',
+      title: 'Generator power without a battery',
+      detail: `${Math.round(requiredSourceW)} W estimated peak input demand; ${Math.round(maximumGenerationW)} W maximum generator power available. This only compares power and assumes suitable conversion equipment.`,
+    })
+  } else if (generators.length) {
+    checks.push({
+      status: 'unknown',
+      title: 'Generator power unknown',
+      detail:
+        'No battery is enabled and the selected generator has no rated power.',
+    })
+  } else {
+    checks.push({
+      status: 'no',
+      title: 'No power source switched on',
+      detail:
+        'Switch on either a battery or a generator to supply the consumers.',
+    })
   }
-  for (const generator of generators) {
-    if (!mppt) { checks.push(result('marginal', 'missing-controller', `${generator.component.name} has no selected charge controller.`, [generator.component.id])); continue }
-    const voltage = generator.component.electrical.openCircuitVoltageV ?? generator.component.electrical.maximumVoltageV
-    const maxV = mppt.component.electrical.maximumPvVoltageV ?? mppt.component.electrical.input?.maximumVoltageV
-    const operatingV = generator.component.electrical.maximumPowerVoltageV ?? generator.component.electrical.nominalVoltageV
-    const minMppt = mppt.component.electrical.mpptMinimumVoltageV
-    if (voltage == null || maxV == null) checks.push(result('unknown', 'pv-voltage-unknown', 'Generator/controller maximum voltage cannot be checked.', [generator.component.id, mppt.component.id]))
-    else checks.push(result(voltage <= maxV ? 'compatible' : 'incompatible', 'pv-maximum-voltage', `${voltage} V generator maximum/open-circuit voltage versus ${maxV} V controller maximum.`, [generator.component.id, mppt.component.id]))
-    if (operatingV != null && minMppt != null && operatingV < minMppt) checks.push(result('marginal', 'pv-below-mppt', `${operatingV} V generator operating voltage is below the ${minMppt} V MPPT range.`, [generator.component.id, mppt.component.id]))
-    const current = generator.component.electrical.shortCircuitCurrentA ?? generator.component.electrical.ratedCurrentA
-    const maxCurrent = mppt.component.electrical.maximumPvCurrentA ?? mppt.component.electrical.input?.maximumCurrentA
-    if (current == null || maxCurrent == null) checks.push(result('unknown', 'pv-current-unknown', 'Generator/controller current compatibility cannot be checked.', [generator.component.id, mppt.component.id]))
-    else checks.push(result(current * generator.selected.quantity <= maxCurrent ? 'compatible' : 'incompatible', 'pv-input-current', `${(current * generator.selected.quantity).toFixed(1)} A generator current versus ${maxCurrent.toFixed(1)} A controller limit.`, [generator.component.id, mppt.component.id]))
+
+  for (const battery of batteries) {
+    for (const inverter of inverters) {
+      const voltage = battery.component.electrical.nominalVoltageV
+      const minimum = inverter.component.electrical.input?.minimumVoltageV
+      const maximum = inverter.component.electrical.input?.maximumVoltageV
+      if (voltage == null || minimum == null || maximum == null) {
+        checks.push({
+          status: 'unknown',
+          title: 'Battery voltage unknown',
+          detail: 'Battery and inverter voltage data is incomplete.',
+        })
+      } else {
+        checks.push({
+          status: voltage >= minimum && voltage <= maximum ? 'yes' : 'no',
+          title: 'Battery voltage',
+          detail: `${voltage} V battery; inverter accepts ${minimum}–${maximum} V.`,
+        })
+      }
+    }
   }
-  if (!checks.length) checks.push(result('unknown', 'empty-system', 'Add components to evaluate compatibility.', []))
-  return checks
+
+  const decisiveChecks = checks.filter(
+    (check) =>
+      check.title === 'Inverter power' ||
+      check.title === 'Battery power' ||
+      check.title === 'Battery voltage' ||
+      check.title === 'Generator power without a battery' ||
+      check.title === 'Generator power unknown' ||
+      check.title === 'No inverter switched on' ||
+      check.title === 'No power source switched on',
+  )
+  const canRunPeak =
+    !consumers.length ||
+    decisiveChecks.some((check) => check.status === 'unknown')
+      ? 'unknown'
+      : decisiveChecks.some((check) => check.status === 'no')
+        ? 'no'
+        : 'yes'
+
+  const dcAverageDemandW =
+    inverterEfficiency > 0
+      ? averageDemandW / inverterEfficiency
+      : averageDemandW
+  const runtimeHours =
+    usableBatteryWh > 0 && dcAverageDemandW > 0
+      ? (usableBatteryWh * batteryEfficiency) / dcAverageDemandW
+      : null
+
+  const assumptions: string[] = [
+    'All enabled consumers are assumed to reach their peak at the same time.',
+    'Runtime starts with a full battery and assumes no generation at all.',
+    'The percentage on a consumer or generator represents its average power.',
+    'The percentage on a battery represents the share of listed usable capacity available for this calculation.',
+  ]
+  if (inverterEfficiency === 1 && inverters.length) {
+    assumptions.push(
+      'Missing inverter efficiency was treated as 100%, so runtime may be optimistic.',
+    )
+  }
+
+  return {
+    canRunPeak,
+    peakAnswer:
+      canRunPeak === 'yes'
+        ? 'Yes, the enabled inverter and power source pass the available rough peak-power checks.'
+        : canRunPeak === 'no'
+          ? 'No, at least one enabled component is below the calculated peak requirement.'
+          : 'There is not enough information to answer this yet.',
+    runtimeHours,
+    runtimeAnswer: !batteries.length
+      ? 'Cannot calculate battery runtime because no battery is switched on.'
+      : runtimeHours == null
+        ? 'Switch on at least one consumer with known power values.'
+        : `About ${runtimeHours.toFixed(1)} hours from a full battery, assuming no generation.`,
+    averageDemandW,
+    continuousDemandW,
+    peakDemandW,
+    averageGenerationW,
+    usableBatteryWh,
+    generationBalanceW: averageGenerationW - averageDemandW,
+    checks,
+    assumptions,
+  }
 }

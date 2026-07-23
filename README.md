@@ -1,26 +1,46 @@
-# Island Energy System Calculator
+# Community Energy Calculator
 
-A privacy-friendly, fully static web application for assembling small off-grid energy systems, checking electrical compatibility, and simulating battery state of charge. All calculations run locally in the browser; there are no accounts, cookies, analytics, or backend services.
+A small, fully static website for answering three basic questions about a simple battery energy system:
 
-## Features
+1. Can the enabled inverter and power source supply the consumers' peak power?
+2. How long can the enabled consumers run from a full battery when there is no generation?
+3. How does the average power balance change when components are switched on or off?
 
-- Searchable, source-backed component catalogue with one JSON file per physical device
-- Consumer schedules, generator profiles, 24 h/48 h/7 day simulations, and 1–60 minute resolution
-- Voltage, current, continuous power, startup power, and storage-limit checks
-- Interactive Apache ECharts power-flow, state-of-charge, energy-balance, and contribution charts
-- JSON configuration import/export and optional local restoration
-- JSON Schema validation, issue-driven component contributions, and GitHub Pages deployment
+The calculator is deliberately simple and intended for people without an electrical engineering background. All calculations run locally in the browser. There is no backend, account, tracking, analytics, or cookie requirement.
 
-> Screenshot placeholder: add `docs/screenshot.png` after the first public deployment.
+## Important limitation
 
-## Local development
+This is only a rough planning aid. It compares a small number of listed power, energy, current, and voltage values. It does not prove electrical compatibility, safety, compliance, or reliable operation. Data and software may be incomplete, outdated, or wrong. Verify every value with the original manufacturer documentation and involve a qualified professional before buying, connecting, or operating equipment.
 
-Requires Node.js 22 or later.
+## How it works
+
+- Add consumers, generators, batteries, and converters from individual JSON files.
+- Switch every selected component on or off.
+- Set quantity and one simple percentage:
+  - consumer: average power as a percentage of continuous power;
+  - generator: average output as a percentage of rated power;
+  - battery: share of listed usable capacity available;
+  - converter: available share of its listed rating.
+- Read the peak-power answer, battery runtime, average power balance, and basic checks.
+
+The peak calculation conservatively assumes that all enabled consumers may reach their listed startup or peak power at the same time.
+
+A battery is optional for the peak-power answer. Without a battery, enabled generator rated power is compared with the estimated peak input demand. Battery runtime cannot be calculated when no battery is enabled.
+
+## Development
+
+You can run the project either with Docker or with a local Node.js installation.
+
+For complete Windows PowerShell and Docker instructions, including troubleshooting, read [Local development](docs/local-development.md).
+
+Quick start with Node.js 22 or later:
 
 ```bash
 npm install
 npm run dev
 ```
+
+Then open `http://localhost:5173/`.
 
 Quality checks:
 
@@ -31,15 +51,19 @@ npm run lint
 npm run build
 ```
 
-## Deployment
+## Component data
 
-The Pages workflow builds on pushes to `main`. Vite derives the repository base path in GitHub Actions and uses `/` locally. Enable **GitHub Actions** as the Pages source in repository settings.
+Every physical component has its own JSON file under `data/`. Every entry must include at least one public source. Unknown values remain `null` or are omitted; they must never be guessed.
 
-## Contributing data
+Use the GitHub **Add a component** issue form or follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
-Use the **Add a new component** issue form or follow [CONTRIBUTING.md](CONTRIBUTING.md). Every component must cite at least one publicly verifiable source. Manufacturer specifications, official manuals, certification documents, scientific publications, and reproducible measurements are accepted; estimates must be marked as estimates. Demonstration entries in this repository use public generic engineering references and are clearly labelled.
+Technical details are documented in [docs/calculations.md](docs/calculations.md) and [docs/data-model.md](docs/data-model.md).
 
-See [calculation methodology](docs/calculations.md) and the [data model](docs/data-model.md) for technical details.
+For a file-by-file description of the complete application, runtime data flow, exact formulas, contribution automation, tests, and deployment, read [Project architecture](docs/architecture.md).
+
+## GitHub Pages
+
+The deployment workflow validates data, runs tests and lint, builds the static site, and deploys `dist/` through GitHub Pages. Select **GitHub Actions** as the Pages source in repository settings.
 
 ## License
 

@@ -14,14 +14,8 @@
     "component:from-issue": "tsx scripts/issue-to-component.ts"
   },
   "dependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
-    "echarts": "^6.0.0",
-    "echarts-for-react": "^3.0.5",
-    "lucide-react": "^0.525.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "zod": "^4.0.10"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.31.0",
@@ -29,6 +23,8 @@
     "@types/react": "^19.1.9",
     "@types/react-dom": "^19.1.7",
     "@vitejs/plugin-react": "^4.7.0",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "eslint": "^9.31.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",

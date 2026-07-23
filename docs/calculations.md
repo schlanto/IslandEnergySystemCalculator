@@ -1,21 +1,79 @@
 # Calculation methodology
 
-## Scope and topology
+## Intended scope
 
-Version 0.1 models a single DC storage bus with generator → charge controller → battery → inverter → load. Components may be selected freely, but arbitrary wiring, series/parallel string design, cable losses, phase balance, temperature, and ageing are not yet modelled.
+The calculator models a deliberately simple system:
 
-## Static compatibility
+```text
+generator → optional battery → inverter → consumers
+```
 
-Continuous load is the sum of active consumer rated powers multiplied by quantity. Worst single-device startup load replaces one device's continuous power with its startup power; inverter continuous and peak limits are checked separately. Nominal battery voltage is checked against inverter input range, load voltage against inverter output voltage (±5%), and PV open-circuit/maximum voltage against controller limits. Missing operands produce an `unknown` result.
+It answers rough planning questions. It is not an electrical design or safety tool.
 
-Battery current is `power / voltage / efficiency`. Runtime is `available usable energy × discharge efficiency / average load`. Runtime is an energy estimate, not a guarantee of peak capability.
+## Enabled components
 
-## Time-series simulation
+Only components switched **ON** by the user are included. Changing a switch recalculates every answer immediately.
 
-Each interval evaluates configured schedules, generator profiles, conversion efficiency, and net DC-bus balance. Surplus first charges the battery within charge-power, capacity, and maximum-SOC limits; the remainder is curtailed. Deficit discharges within discharge-power, available-energy, and minimum-SOC limits; the remainder is unmet load. Energy is integrated as power × interval hours.
+Quantity multiplies the component's listed values.
 
-Inverter efficiency is linearly interpolated between curve points, otherwise nominal efficiency is used. If efficiency is missing, the simulator only uses a user-supplied fallback; absent that, it visibly records the uncertain 100% treatment. SOC is clamped by the energy available to the charge/discharge equations.
+## Percentage control
 
-## Limitations
+Each component has one percentage:
 
-The solar profile is an idealized daylight sine curve; wind/other production uses a user capacity factor. Startup events are statically checked but not synthesized into the time series. Multiple batteries are aggregated; converter routing is predefined. Results are planning guidance, not electrical design approval.
+- Consumer: average demand equals continuous power × percentage.
+- Generator: average generation equals rated power × percentage.
+- Battery: available energy and output power equal the listed values × percentage.
+- Converter: available continuous and peak power equal the listed values × percentage.
+
+The percentage is an estimate, not a measurement.
+
+## Peak-power answer
+
+The consumer peak is:
+
+```text
+sum of (startup power, or continuous power when startup is unknown) × quantity
+```
+
+The model assumes all enabled consumers can peak at the same time. This is simple and conservative.
+
+The result compares this demand with:
+
+- enabled inverter continuous and peak output;
+- enabled battery continuous output, when a battery is present;
+- enabled generator rated output when no battery is present;
+- battery nominal voltage and inverter input-voltage range.
+
+Missing values produce an unknown result. Passing these comparisons does not prove real compatibility.
+For a battery-free system, the generator comparison only checks power and assumes that suitable conversion and control equipment exists.
+
+## Runtime without generation
+
+Runtime always assumes:
+
+- the battery starts full;
+- there is no generation at all;
+- average consumer demand remains constant;
+- enabled inverter and battery efficiencies remain constant.
+
+The estimate is:
+
+```text
+available battery energy × battery efficiency
+------------------------------------------------
+average consumer power ÷ inverter efficiency
+```
+
+If efficiency is missing, the calculation uses 100% and displays that optimistic assumption.
+
+## Average power balance
+
+```text
+average generation − average consumer demand
+```
+
+A positive result is a surplus; a negative result is a deficit. This balance does not model weather, time of day, charging limits, or changing battery state.
+
+## Not checked
+
+The calculator does not fully check cables, fuses, earthing, short circuits, cooling, temperature, communications, BMS compatibility, firmware, standards, laws, permits, phase balance, real startup curves, site weather, or installation requirements.

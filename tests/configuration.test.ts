@@ -1,5 +1,0 @@
-import { describe,expect,it } from 'vitest'
-import { exportConfiguration,validateConfiguration } from '../src/validation/configuration'
-import type { Component,SystemConfiguration } from '../src/models/types'
-const component={id:'known'} as Component;const valid:SystemConfiguration={configurationVersion:'1.0',applicationVersion:'x',name:'x',createdAt:'x',simulation:{durationHours:24,resolutionMinutes:15,initialSocPercent:80,minimumSocPercent:10,maximumSocPercent:100},components:[{instanceId:'1',componentId:'known',quantity:1,usage:{mode:'always'}}]}
-describe('configuration files',()=>{it('validates known component references',()=>expect(validateConfiguration(valid,[component]).name).toBe('x'));it('rejects missing component references',()=>expect(()=>validateConfiguration({...valid,components:[{...valid.components[0],componentId:'missing'}]},[component])).toThrow('Missing or outdated'));it('exports versioned JSON',()=>expect(JSON.parse(exportConfiguration(valid)).configurationVersion).toBe('1.0'))})
