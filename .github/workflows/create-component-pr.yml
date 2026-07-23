@@ -13,16 +13,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
-      - run: npm install
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
       - name: Save structured issue body
         uses: actions/github-script@v7
         with:
           script: |
-            require('fs').writeFileSync('issue-body.md', context.payload.issue.body || '')
+            require('fs').writeFileSync(`${process.env.RUNNER_TEMP}/issue-body.md`, context.payload.issue.body || '')
       - name: Generate component JSON
         id: component
-        run: npm run component:from-issue -- issue-body.md
+        run: npm run component:from-issue -- "$RUNNER_TEMP/issue-body.md"
       - run: npm run validate:data
       - name: Create pull request
         id: pr
@@ -30,8 +30,8 @@ jobs:
         with:
           token: ${{ github.token }}
           branch: component/${{ steps.component.outputs.component_id }}
-          commit-message: "Add component: ${{ steps.component.outputs.component_name }}"
-          title: "Add ${{ steps.component.outputs.component_name }}"
+          commit-message: 'Add component: ${{ steps.component.outputs.component_name }}'
+          title: 'Add ${{ steps.component.outputs.component_name }}'
           labels: component-data,needs-review
           body: |
             Closes #${{ github.event.issue.number }}

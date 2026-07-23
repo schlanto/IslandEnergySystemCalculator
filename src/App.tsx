@@ -1,155 +1,564 @@
-import { useMemo, useRef, useState } from 'react'
-import ReactECharts from 'echarts-for-react'
-import { AlertTriangle, BatteryCharging, CheckCircle2, ChevronRight, Download, ExternalLink, FileUp, Github, Info, Plus, RotateCcw, Search, Trash2, XCircle, Zap } from 'lucide-react'
+import { useState } from 'react'
+import { calculateSimpleSystem } from './calculation/core'
 import { catalog } from './data/catalog'
-import type { Category, Component, Day, SelectedComponent, SystemConfiguration, Usage } from './models/types'
-import { simulate } from './simulation/simulate'
-import { exportConfiguration, validateConfiguration } from './validation/configuration'
-import { startupLoad } from './calculation/core'
+import type { Category, Component, SelectedComponent } from './models/types'
 
-const VERSION = '0.1.0'
-const storageKey = 'island-energy-configuration-v1'
-const days: Day[] = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
-const dayLabels: Record<Day,string> = {monday:'M',tuesday:'T',wednesday:'W',thursday:'T',friday:'F',saturday:'S',sunday:'S'}
-const categoryCopy: Record<Category,{label:string;color:string}> = {generator:{label:'Generation',color:'#f2b84b'},consumer:{label:'Loads',color:'#ff7c66'},storage:{label:'Storage',color:'#62d4a7'},converter:{label:'Conversion',color:'#7ab8ff'}}
+const STORAGE_KEY = 'simple-energy-system-v2'
+const categories: { value: 'all' | Category; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'consumer', label: 'Consumers' },
+  { value: 'generator', label: 'Generators' },
+  { value: 'storage', label: 'Batteries' },
+  { value: 'converter', label: 'Inverters & controllers' },
+]
 
-const freshConfiguration = (): SystemConfiguration => ({configurationVersion:'1.0',applicationVersion:VERSION,name:'My island system',createdAt:new Date().toISOString(),simulation:{durationHours:24,resolutionMinutes:15,initialSocPercent:80,minimumSocPercent:10,maximumSocPercent:100},components:[]})
-function initialConfiguration() { try { const stored = localStorage.getItem(storageKey); return stored ? validateConfiguration(JSON.parse(stored),catalog) : freshConfiguration() } catch { return freshConfiguration() } }
-function githubRepository() { const configured = import.meta.env.VITE_GITHUB_REPOSITORY as string|undefined; if(configured) return configured; if(location.hostname.endsWith('.github.io')) return `${location.hostname.split('.')[0]}/${location.pathname.split('/').filter(Boolean)[0] ?? 'IslandEnergySystemCalculator'}`; return 'YOUR_USERNAME/IslandEnergySystemCalculator' }
-const fmt = (value:number,unit:string) => `${value >= 1000 ? (value/1000).toFixed(2) : value.toFixed(0)} ${value >= 1000 ? `k${unit}` : unit}`
-const defaultUsage = (component:Component):Usage => component.roles.includes('generator') ? {mode:'production',capacityFactorPercent:component.operation.productionProfile?.capacityFactorPercent ?? 25} : component.consumerType==='refrigerator' ? {mode:'duty_cycle',dutyCyclePercent:35,startupEventsPerHour:2} : component.roles.includes('consumer') ? {mode:'time_window',start:'18:00',end:'23:00',daysOfWeek:[...days]} : {mode:'always'}
-const essentialRating = (component:Component) => component.roles.includes('storage') ? fmt(component.electrical.usableCapacityWh ?? 0,'Wh') : fmt(component.electrical.ratedPowerW ?? component.electrical.output?.continuousPowerW ?? component.electrical.continuousPowerW ?? 0,'W')
+function repositoryName() {
+  const configured = import.meta.env.VITE_GITHUB_REPOSITORY as
+    string | undefined
+  if (configured) return configured
+  if (location.hostname.endsWith('.github.io')) {
+    return `${location.hostname.split('.')[0]}/${location.pathname.split('/').filter(Boolean)[0] ?? 'IslandEnergySystemCalculator'}`
+  }
+  return ''
+}
+
+function initialSelection(): SelectedComponent[] {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (!saved) return []
+    const value = JSON.parse(saved) as SelectedComponent[]
+    return Array.isArray(value) ? value : []
+  } catch {
+    return []
+  }
+}
+
+function powerLabel(component: Component) {
+  if (component.roles.includes('storage')) {
+    const capacity =
+      component.electrical.usableCapacityWh ??
+      component.electrical.nominalCapacityWh
+    return capacity == null ? 'Capacity unknown' : `${capacity} Wh usable`
+  }
+  const power =
+    component.electrical.ratedPowerW ??
+    component.electrical.output?.continuousPowerW ??
+    component.electrical.continuousPowerW
+  return power == null ? 'Power unknown' : `${power} W`
+}
+
+function percentageLabel(component: Component) {
+  if (component.roles.includes('consumer')) return 'Average power used'
+  if (component.roles.includes('generator')) return 'Average power generated'
+  if (component.roles.includes('storage'))
+    return 'Available battery capacity and power'
+  return 'Available rated power'
+}
+
+function defaultPercentage(component: Component) {
+  if (
+    component.roles.includes('consumer') ||
+    component.roles.includes('generator')
+  )
+    return 50
+  return 100
+}
 
 function App() {
-  const [configuration,setConfigurationState] = useState<SystemConfiguration>(initialConfiguration)
-  const [query,setQuery] = useState('')
-  const [category,setCategory] = useState<'all'|Category>('all')
-  const [manufacturer,setManufacturer] = useState('all')
-  const [detail,setDetail] = useState<Component|null>(null)
-  const [notice,setNotice] = useState<string|null>(null)
-  const importRef = useRef<HTMLInputElement>(null)
-  const repository = githubRepository()
-  const setConfiguration = (next:SystemConfiguration) => { setConfigurationState(next); localStorage.setItem(storageKey,JSON.stringify(next)) }
-  const result = useMemo(()=>simulate(configuration,catalog),[configuration])
-  const filtered = catalog.filter((component)=>(category==='all'||component.category===category)&&(manufacturer==='all'||component.manufacturer===manufacturer)&&`${component.name} ${component.model} ${component.manufacturer} ${component.roles.join(' ')}`.toLowerCase().includes(query.toLowerCase()))
-  const selected = configuration.components.map((entry)=>({entry,component:catalog.find((candidate)=>candidate.id===entry.componentId)!})).filter((x)=>x.component)
-  const installedGenerationW = selected.filter((x)=>x.component.roles.includes('generator')).reduce((sum,x)=>sum+(x.component.electrical.ratedPowerW??0)*x.entry.quantity,0)
-  const usableStorageWh = selected.filter((x)=>x.component.roles.includes('storage')).reduce((sum,x)=>sum+(x.component.electrical.usableCapacityWh??0)*x.entry.quantity,0)
-  const maximumStartupW = startupLoad(selected.filter((x)=>x.component.roles.includes('consumer')).map((x)=>({component:x.component,selected:x.entry})))
-  const overall = result.compatibility.some((x)=>x.status==='incompatible')?'incompatible':result.compatibility.some((x)=>x.status==='marginal')?'marginal':result.compatibility.every((x)=>x.status==='compatible')?'compatible':'unknown'
+  const [selected, setSelectedState] =
+    useState<SelectedComponent[]>(initialSelection)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState<'all' | Category>('all')
+  const repository = repositoryName()
+  const repositoryUrl = repository ? `https://github.com/${repository}` : '#'
 
-  const add = (component:Component) => { const existing=configuration.components.find((item)=>item.componentId===component.id); if(existing) setConfiguration({...configuration,components:configuration.components.map((item)=>item.instanceId===existing.instanceId?{...item,quantity:item.quantity+1}:item)}); else setConfiguration({...configuration,components:[...configuration.components,{instanceId:crypto.randomUUID(),componentId:component.id,quantity:1,usage:defaultUsage(component)}]}); setNotice(`${component.name} added`) }
-  const updateSelected = (id:string,patch:Partial<SelectedComponent>) => setConfiguration({...configuration,components:configuration.components.map((item)=>item.instanceId===id?{...item,...patch}:item)})
-  const remove = (id:string) => setConfiguration({...configuration,components:configuration.components.filter((item)=>item.instanceId!==id)})
-  const download = () => { const blob=new Blob([exportConfiguration(configuration)],{type:'application/json'}); const url=URL.createObjectURL(blob); const anchor=document.createElement('a'); anchor.href=url; anchor.download=`${configuration.name.toLowerCase().replace(/[^a-z0-9]+/g,'-')||'system'}.json`; anchor.click(); URL.revokeObjectURL(url) }
-  const importFile = async (file?:File) => { if(!file)return; try { const parsed=validateConfiguration(JSON.parse(await file.text()),catalog); setConfiguration(parsed); setNotice('Configuration imported successfully') } catch(error) { setNotice(`Import failed: ${error instanceof Error?error.message:'Invalid file'}`) } finally { if(importRef.current)importRef.current.value='' } }
-  const reset = () => { const fresh=freshConfiguration(); setConfiguration(fresh); localStorage.removeItem(storageKey); setNotice('Configuration reset') }
+  const setSelected = (next: SelectedComponent[]) => {
+    setSelectedState(next)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
 
-  const chartBase={backgroundColor:'transparent',textStyle:{color:'#42564f',fontFamily:'Arial, sans-serif'},tooltip:{trigger:'axis'},grid:{left:48,right:18,top:34,bottom:35},xAxis:{type:'category',data:result.points.map((p)=>`${Math.floor(p.hour/24)}d ${String(Math.floor(p.hour%24)).padStart(2,'0')}:00`),axisLine:{lineStyle:{color:'#9aaca5'}},axisLabel:{hideOverlap:true,color:'#53665f'}},yAxis:{type:'value',axisLine:{show:false},axisLabel:{color:'#53665f'},splitLine:{lineStyle:{color:'#d8e0dc'}}}}
-  const powerOption={...chartBase,legend:{data:['Generation','Demand','Charge','Discharge'],textStyle:{color:'#42564f'}},series:[['Generation','#c58a16','generationW'],['Demand','#c9564b','demandW'],['Charge','#25845f','batteryChargeW'],['Discharge','#397db5','batteryDischargeW']].map(([name,color,key])=>({name,type:'line',showSymbol:false,smooth:true,lineStyle:{width:2,color},itemStyle:{color},data:result.points.map((p)=>p[key as keyof typeof p])}))}
-  const socOption={...chartBase,yAxis:{...chartBase.yAxis,min:0,max:100},series:[{name:'SOC',type:'line',showSymbol:false,smooth:true,areaStyle:{color:'rgba(98,212,167,.15)'},lineStyle:{color:'#62d4a7',width:3},markLine:{silent:true,data:[{yAxis:configuration.simulation.minimumSocPercent},{yAxis:configuration.simulation.maximumSocPercent}],lineStyle:{color:'#768d86',type:'dashed'}},data:result.points.map((p)=>p.socPercent)}]}
-  const energyOption={tooltip:{trigger:'item'},grid:{left:80,right:20,top:10,bottom:25},xAxis:{type:'value',axisLabel:{color:'#9fb3ac'},splitLine:{lineStyle:{color:'#1b3730'}}},yAxis:{type:'category',data:['Generated','Consumed','Losses','Unmet','Curtailed'],axisLabel:{color:'#b7c9c3'}},series:[{type:'bar',data:[result.totals.generationWh,result.totals.demandWh,result.totals.lossesWh,result.totals.unmetWh,result.totals.unusedWh],itemStyle:{color:(p:{dataIndex:number})=>['#f2b84b','#ff7c66','#7ab8ff','#ef5b5b','#768d86'][p.dataIndex],borderRadius:[0,5,5,0]}}]}
-  const contributionOption={tooltip:{trigger:'item'},series:[{type:'pie',radius:['45%','72%'],label:{color:'#42564f'},data:result.consumerEnergy.map((x)=>({name:x.name,value:x.energyWh}))}]}
+  const items = selected.flatMap((entry) => {
+    const component = catalog.find(
+      (candidate) => candidate.id === entry.componentId,
+    )
+    return component ? [{ component, selected: entry }] : []
+  })
+  const result = calculateSimpleSystem(items)
 
-  return <div className="app-shell">
-    <header className="topbar"><a className="plain-project-name" href="#top">Community Energy Calculator</a><nav><a href="#configure">Configure</a><a href="#results">Results</a><a href="#documentation">Documentation</a><a href={`https://github.com/${repository}`} target="_blank">GitHub</a></nav><a className="button ghost compact" href={`https://github.com/${repository}/issues/new?template=add-component.yml`} target="_blank"><Plus size={16}/> Add component</a></header>
-    <main id="top">
-      <section className="homepage-disclaimer" role="alert"><div className="homepage-disclaimer-inner"><AlertTriangle size={28}/><div><strong>Planning aid only — verify everything yourself</strong><p>This community-built calculator only performs rough comparisons of a few entered voltage, current, power, and energy values. It may be incomplete, incorrect, outdated, or broken. It does not prove compatibility, safety, regulatory compliance, or reliable operation. Check every value against the original documentation and have the complete system reviewed by a qualified professional before buying, connecting, or operating equipment.</p><a href="#docs-limits">Read the full limitations and safety notice</a></div></div></section>
-      <section className="hero"><div><div className="eyebrow"><span/> PRIVATE · STATIC · OPEN SOURCE</div><h1>Plan a small<br/><em>off-grid energy system.</em></h1><p>Combine generators, batteries, converters and loads. Check basic electrical limits and explore the energy balance—entirely in your browser.</p><div className="hero-actions"><a className="button primary" href="#configure">Start configuring <ChevronRight size={18}/></a><a className="text-link" href="#documentation">Read the documentation <ChevronRight size={16}/></a></div></div><div className="hero-visual"><div className="orbit o1"><Zap/></div><div className="orbit o2"><BatteryCharging/></div><div className="energy-core"><span>{selected.length}</span><small>components</small></div><svg viewBox="0 0 500 280" aria-hidden="true"><path d="M45 145 C140 30 330 20 455 135"/><path d="M55 180 C190 270 330 250 445 165"/></svg></div></section>
+  const filtered = catalog.filter(
+    (component) =>
+      (category === 'all' || component.category === category) &&
+      `${component.name} ${component.manufacturer} ${component.model}`
+        .toLowerCase()
+        .includes(query.toLowerCase()),
+  )
 
-      {notice&&<button className="notice" onClick={()=>setNotice(null)}>{notice}<span>×</span></button>}
-      <section id="configure" className="workspace section"><div className="section-heading"><div><span className="step">01</span><h2>Build your system</h2><p>Choose sourced demonstration components, then describe how you use them.</p></div><div className="topology"><span>GEN</span><i/><span>CTRL</span><i/><span>BAT</span><i/><span>INV</span><i/><span>LOAD</span></div></div>
-        <div className="builder-grid"><div className="catalog-panel panel"><div className="panel-title"><div><h3>Component library</h3><small>{catalog.length} verified entries</small></div></div><div className="filters"><label className="search"><Search size={16}/><input value={query} onChange={(e)=>setQuery(e.target.value)} placeholder="Search components…"/></label><select value={manufacturer} onChange={(e)=>setManufacturer(e.target.value)}><option value="all">All manufacturers</option>{[...new Set(catalog.map((x)=>x.manufacturer))].map((x)=><option key={x}>{x}</option>)}</select></div><div className="category-tabs"><button className={category==='all'?'active':''} onClick={()=>setCategory('all')}>All</button>{Object.entries(categoryCopy).map(([key,value])=><button key={key} className={category===key?'active':''} onClick={()=>setCategory(key as Category)}>{value.label}</button>)}</div><div className="catalog-list">{filtered.map((component)=><article className="component-card" key={component.id}><button className="card-main" onClick={()=>setDetail(component)}><span className="role-dot" style={{background:categoryCopy[component.category].color}}/><span><strong>{component.name}</strong><small>{component.manufacturer} · {component.model}</small></span><b>{essentialRating(component)}</b></button><button className="icon-button" aria-label={`Add ${component.name}`} onClick={()=>add(component)}><Plus size={18}/></button></article>)}{!filtered.length&&<div className="empty">No components match these filters.</div>}</div></div>
-          <div className="system-panel panel"><div className="panel-title"><div><h3>Current system</h3><small>{selected.length} component types</small></div><span className={`status-pill ${overall}`}>{overall}</span></div><input className="system-name" value={configuration.name} onChange={(e)=>setConfiguration({...configuration,name:e.target.value})} aria-label="Configuration name"/>
-            <div className="selected-list">{selected.map(({entry,component})=><SelectedCard key={entry.instanceId} entry={entry} component={component} update={updateSelected} remove={remove}/>) }{!selected.length&&<div className="empty-system"><Zap size={25}/><strong>Your system is empty</strong><span>Add components from the library to begin.</span></div>}</div>
-            <div className="simulation-settings"><h4>Simulation</h4><label>Duration<select value={configuration.simulation.durationHours} onChange={(e)=>setConfiguration({...configuration,simulation:{...configuration.simulation,durationHours:Number(e.target.value) as 24|48|168}})}><option value="24">24 hours</option><option value="48">48 hours</option><option value="168">7 days</option></select></label><label>Resolution<select value={configuration.simulation.resolutionMinutes} onChange={(e)=>setConfiguration({...configuration,simulation:{...configuration.simulation,resolutionMinutes:Number(e.target.value) as 1|5|15|60}})}><option value="1">1 minute</option><option value="5">5 minutes</option><option value="15">15 minutes</option><option value="60">60 minutes</option></select></label><label>Initial SOC <b>{configuration.simulation.initialSocPercent}%</b><input type="range" min="10" max="100" value={configuration.simulation.initialSocPercent} onChange={(e)=>setConfiguration({...configuration,simulation:{...configuration.simulation,initialSocPercent:Number(e.target.value)}})}/></label></div>
-            <div className="config-actions"><button className="button small" onClick={download}><Download size={15}/> Export</button><button className="button small" onClick={()=>importRef.current?.click()}><FileUp size={15}/> Import</button><input ref={importRef} hidden type="file" accept="application/json" onChange={(e)=>importFile(e.target.files?.[0])}/><button className="button small danger" onClick={reset}><RotateCcw size={15}/> Reset</button></div>
-          </div></div>
-      </section>
+  const addComponent = (component: Component) => {
+    const existing = selected.find(
+      (entry) => entry.componentId === component.id,
+    )
+    if (existing) {
+      setSelected(
+        selected.map((entry) =>
+          entry.instanceId === existing.instanceId
+            ? { ...entry, quantity: entry.quantity + 1, enabled: true }
+            : entry,
+        ),
+      )
+      return
+    }
+    setSelected([
+      ...selected,
+      {
+        instanceId: crypto.randomUUID(),
+        componentId: component.id,
+        quantity: 1,
+        enabled: true,
+        operatingPercent: defaultPercentage(component),
+      },
+    ])
+  }
 
-      <section id="results" className="results section"><div className="section-heading"><div><span className="step">02</span><h2>System performance</h2><p>Results recalculate instantly as your configuration changes.</p></div><div className={`overall-card ${overall}`}>{overall==='compatible'?<CheckCircle2/>:overall==='incompatible'?<XCircle/>:<AlertTriangle/>}<div><small>OVERALL STATUS</small><strong>{overall}</strong></div></div></div>
-        <div className="metric-grid"><Metric label="Installed generation" value={fmt(installedGenerationW,'W')}/><Metric label="Energy demand" value={fmt(result.totals.demandWh,'Wh')}/><Metric label="Generated energy" value={fmt(result.totals.generationWh,'Wh')}/><Metric label="Usable storage" value={fmt(usableStorageWh,'Wh')}/><Metric label="Minimum SOC" value={`${result.totals.minSocPercent.toFixed(1)} %`}/><Metric label="Unmet energy" value={fmt(result.totals.unmetWh,'Wh')} alert={result.totals.unmetWh>0}/><Metric label="Peak load" value={fmt(result.totals.maxLoadW,'W')}/><Metric label="Startup load" value={fmt(maximumStartupW,'W')}/><Metric label="Runtime estimate" value={result.totals.runtimeHours==null?'Unknown':`${result.totals.runtimeHours.toFixed(1)} h`}/></div>
-        <div className="charts-grid"><Chart title="Power flow over time" wide option={powerOption}/><Chart title="Battery state of charge" wide option={socOption}/><Chart title="Energy balance" option={energyOption}/><Chart title="Consumer contribution" option={contributionOption}/></div>
-        <div className="diagnostics"><div className="panel"><div className="panel-title"><h3>Compatibility checks</h3><span>{result.compatibility.length}</span></div>{result.compatibility.map((check,index)=><div className={`check ${check.status}`} key={`${check.code}-${index}`}>{check.status==='compatible'?<CheckCircle2/>:check.status==='incompatible'?<XCircle/>:<AlertTriangle/>}<div><strong>{check.code.replaceAll('-',' ')}</strong><span>{check.message}</span></div></div>)}</div><div className="panel"><div className="panel-title"><h3>Limits & assumptions</h3><Info size={17}/></div><div className="assumption"><span>Overload events</span><strong>{result.totals.overloadEvents}</strong></div><div className="assumption"><span>Conversion losses</span><strong>{fmt(result.totals.lossesWh,'Wh')}</strong></div><div className="assumption"><span>Curtailed generation</span><strong>{fmt(result.totals.unusedWh,'Wh')}</strong></div>{result.assumptions.map((x)=><p className="warning" key={x}><AlertTriangle size={14}/>{x}</p>)}</div></div>
-      </section>
-      <Documentation repository={repository}/>
-      <section id="support" className="contribution"><span className="eyebrow">COMMUNITY DATA</span><h2>Know a component we’re missing?</h2><p>Help grow the open catalogue. Every submission is source-checked and reviewed before it becomes available.</p><div><a className="button primary" href={`https://github.com/${repository}/issues/new?template=add-component.yml`} target="_blank"><Plus/> Add a new component</a><a className="button ghost" href={`https://github.com/${repository}`} target="_blank"><Github/> View source</a></div></section>
-    </main><footer><span>IslandEnergy Calculator · v{VERSION}</span><span>No tracking · No cookies · Your data stays local</span></footer>
-    {detail&&<div className="modal-backdrop" onClick={()=>setDetail(null)}><div className="modal" onClick={(e)=>e.stopPropagation()}><button className="modal-close" onClick={()=>setDetail(null)}>×</button><span className="eyebrow">{detail.category}</span><h2>{detail.name}</h2><p>{detail.description}</p><dl><div><dt>Manufacturer / model</dt><dd>{detail.manufacturer} · {detail.model}</dd></div><div><dt>Essential rating</dt><dd>{essentialRating(detail)}</dd></div><div><dt>Data quality</dt><dd>{detail.dataQuality.level.replaceAll('_',' ')} · {detail.dataQuality.confidence}</dd></div></dl><h4>Sources</h4>{detail.sources.map((source)=><a className="source-link" key={source.url} href={source.url} target="_blank">{source.title}<ExternalLink size={14}/></a>)}{detail.notes.map((note)=><p className="warning" key={note}><Info size={14}/>{note}</p>)}<div className="modal-actions"><button className="button primary" onClick={()=>{add(detail);setDetail(null)}}><Plus/> Add to system</button><a className="text-link" target="_blank" href={`https://github.com/${repository}/issues/new?title=${encodeURIComponent(`Data correction: ${detail.id}`)}&body=${encodeURIComponent(`Component ID: ${detail.id}\n\nDescribe the incorrect value and provide a source:\n`)}`}>Report incorrect data</a></div></div></div>}
-  </div>
+  const updateComponent = (
+    instanceId: string,
+    patch: Partial<SelectedComponent>,
+  ) =>
+    setSelected(
+      selected.map((entry) =>
+        entry.instanceId === instanceId ? { ...entry, ...patch } : entry,
+      ),
+    )
+
+  const removeComponent = (instanceId: string) =>
+    setSelected(selected.filter((entry) => entry.instanceId !== instanceId))
+
+  return (
+    <div className="site">
+      <header className="topbar">
+        <a className="project-name" href="#top">
+          Community Energy Calculator
+        </a>
+        <nav>
+          <a href="#calculator">Calculator</a>
+          <a href="#answers">Answers</a>
+          <a href="#help">Help</a>
+          {repository && (
+            <a href={repositoryUrl} target="_blank" rel="noreferrer">
+              GitHub
+            </a>
+          )}
+        </nav>
+      </header>
+
+      <main id="top">
+        <section className="disclaimer" role="alert">
+          <div>
+            <strong>Rough planning aid only — check everything yourself</strong>
+            <p>
+              This community tool only compares a few power, energy, current,
+              and voltage values. It can be incomplete, wrong, or broken. A
+              positive result does not prove that components are safe or
+              compatible. Check the original manuals and ask a qualified
+              professional before buying, connecting, or operating equipment.
+            </p>
+          </div>
+        </section>
+
+        <section className="intro">
+          <p className="kicker">A small open community project</p>
+          <h1>Can this battery system run my devices?</h1>
+          <p>
+            Add your consumers, inverter, battery, and generators. Switch them
+            on or off and choose a simple average percentage. The calculator
+            answers three basic questions without complex settings.
+          </p>
+          <div className="intro-questions">
+            <span>1. Is peak power sufficient?</span>
+            <span>2. How long will a full battery last?</span>
+            <span>3. What changes when I switch something off?</span>
+          </div>
+        </section>
+
+        <section id="calculator" className="calculator">
+          <div className="section-title">
+            <div>
+              <p>Step 1</p>
+              <h2>Choose components</h2>
+            </div>
+            <a
+              className="suggest-button"
+              href={
+                repository
+                  ? `${repositoryUrl}/issues/new?template=add-component.yml`
+                  : '#community'
+              }
+              target={repository ? '_blank' : undefined}
+              rel={repository ? 'noreferrer' : undefined}
+            >
+              + Suggest a new component
+            </a>
+          </div>
+
+          <div className="calculator-grid">
+            <div className="library box">
+              <label className="search">
+                Search
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="For example: refrigerator"
+                />
+              </label>
+              <div className="filters">
+                {categories.map((item) => (
+                  <button
+                    key={item.value}
+                    className={category === item.value ? 'active' : ''}
+                    onClick={() => setCategory(item.value)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="library-list">
+                {filtered.map((component) => (
+                  <article className="library-item" key={component.id}>
+                    <div>
+                      <span className={`role ${component.category}`}>
+                        {component.category}
+                      </span>
+                      <h3>{component.name}</h3>
+                      <p>
+                        {component.manufacturer} · {component.model}
+                      </p>
+                      <strong>{powerLabel(component)}</strong>
+                    </div>
+                    <button
+                      className="add-button"
+                      onClick={() => addComponent(component)}
+                    >
+                      Add
+                    </button>
+                    <details>
+                      <summary>Data source and notes</summary>
+                      <p>{component.description}</p>
+                      {component.sources.map((source) => (
+                        <a
+                          key={source.url}
+                          href={source.url}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {source.title}
+                        </a>
+                      ))}
+                      {component.notes.map((note) => (
+                        <p key={note}>{note}</p>
+                      ))}
+                    </details>
+                  </article>
+                ))}
+              </div>
+            </div>
+
+            <div className="system box">
+              <div className="system-heading">
+                <div>
+                  <p>Step 2</p>
+                  <h2>Switch and adjust</h2>
+                </div>
+                {selected.length > 0 && (
+                  <button
+                    className="text-button"
+                    onClick={() => setSelected([])}
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+
+              {items.length === 0 ? (
+                <div className="empty-state">
+                  <strong>No components added</strong>
+                  <p>Add components from the list on the left.</p>
+                </div>
+              ) : (
+                <div className="selected-list">
+                  {items.map(({ component, selected: entry }) => (
+                    <article
+                      className={`selected-item ${entry.enabled ? '' : 'disabled'}`}
+                      key={entry.instanceId}
+                    >
+                      <div className="selected-top">
+                        <label className="switch">
+                          <input
+                            type="checkbox"
+                            checked={entry.enabled}
+                            onChange={(event) =>
+                              updateComponent(entry.instanceId, {
+                                enabled: event.target.checked,
+                              })
+                            }
+                          />
+                          <span>{entry.enabled ? 'ON' : 'OFF'}</span>
+                        </label>
+                        <div className="selected-name">
+                          <strong>{component.name}</strong>
+                          <small>{powerLabel(component)}</small>
+                        </div>
+                        <label className="quantity">
+                          Qty
+                          <input
+                            type="number"
+                            min="1"
+                            max="99"
+                            value={entry.quantity}
+                            onChange={(event) =>
+                              updateComponent(entry.instanceId, {
+                                quantity: Math.max(
+                                  1,
+                                  Number(event.target.value),
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <button
+                          className="remove-button"
+                          onClick={() => removeComponent(entry.instanceId)}
+                          aria-label={`Remove ${component.name}`}
+                        >
+                          Remove
+                        </button>
+                      </div>
+
+                      <label className="percentage">
+                        <span>
+                          {percentageLabel(component)}
+                          <button
+                            className="help-dot"
+                            title={
+                              component.roles.includes('storage')
+                                ? '100% uses all listed usable battery capacity and power. A lower value keeps a reserve.'
+                                : 'Estimated average as a percentage of the listed maximum or rated value.'
+                            }
+                            type="button"
+                          >
+                            ?
+                          </button>
+                        </span>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="5"
+                          value={entry.operatingPercent}
+                          onChange={(event) =>
+                            updateComponent(entry.instanceId, {
+                              operatingPercent: Number(event.target.value),
+                            })
+                          }
+                        />
+                        <output>{entry.operatingPercent}%</output>
+                      </label>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section id="answers" className="answers">
+          <div className="section-title">
+            <p>Step 3</p>
+            <h2>Your three answers</h2>
+          </div>
+
+          <div className="answer-grid">
+            <article className={`answer-card ${result.canRunPeak}`}>
+              <span className="answer-number">1</span>
+              <p>Can the system run the enabled consumers?</p>
+              <h3>
+                {result.canRunPeak === 'yes'
+                  ? 'Probably yes'
+                  : result.canRunPeak === 'no'
+                    ? 'Probably not'
+                    : 'Not enough information'}
+              </h3>
+              <strong>{result.peakAnswer}</strong>
+              <dl>
+                <div>
+                  <dt>Continuous consumer power</dt>
+                  <dd>{Math.round(result.continuousDemandW)} W</dd>
+                </div>
+                <div>
+                  <dt>Conservative peak power</dt>
+                  <dd>{Math.round(result.peakDemandW)} W</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article className="answer-card runtime">
+              <span className="answer-number">2</span>
+              <p>How long with no generation and a full battery?</p>
+              <h3>
+                {result.runtimeHours == null
+                  ? 'Unknown'
+                  : `${result.runtimeHours.toFixed(1)} hours`}
+              </h3>
+              <strong>{result.runtimeAnswer}</strong>
+              <dl>
+                <div>
+                  <dt>Average consumer power</dt>
+                  <dd>{Math.round(result.averageDemandW)} W</dd>
+                </div>
+                <div>
+                  <dt>Available battery energy</dt>
+                  <dd>{Math.round(result.usableBatteryWh)} Wh</dd>
+                </div>
+              </dl>
+            </article>
+
+            <article
+              className={`answer-card balance ${result.generationBalanceW >= 0 ? 'yes' : 'no'}`}
+            >
+              <span className="answer-number">3</span>
+              <p>What is the average power balance right now?</p>
+              <h3>
+                {result.generationBalanceW >= 0 ? 'Surplus' : 'Deficit'}{' '}
+                {Math.abs(Math.round(result.generationBalanceW))} W
+              </h3>
+              <strong>
+                Switch any component on or off above. This answer updates
+                immediately.
+              </strong>
+              <dl>
+                <div>
+                  <dt>Average generation</dt>
+                  <dd>{Math.round(result.averageGenerationW)} W</dd>
+                </div>
+                <div>
+                  <dt>Average demand</dt>
+                  <dd>{Math.round(result.averageDemandW)} W</dd>
+                </div>
+              </dl>
+            </article>
+          </div>
+
+          <div className="checks box">
+            <h3>Basic checks</h3>
+            {result.checks.map((check, index) => (
+              <div
+                className={`check-row ${check.status}`}
+                key={`${check.title}-${index}`}
+              >
+                <span>
+                  {check.status === 'yes'
+                    ? 'OK'
+                    : check.status === 'no'
+                      ? 'NO'
+                      : '?'}
+                </span>
+                <div>
+                  <strong>{check.title}</strong>
+                  <p>{check.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section id="help" className="help">
+          <div className="section-title">
+            <p>Help</p>
+            <h2>How to understand this tool</h2>
+          </div>
+          <div className="help-grid">
+            <article>
+              <h3>Power and energy are different</h3>
+              <p>
+                Watts (W) describe power at one moment. Watt-hours (Wh) describe
+                how much energy is used over time. A 100 W device running for 5
+                hours uses about 500 Wh.
+              </p>
+            </article>
+            <article>
+              <h3>Peak power is deliberately simple</h3>
+              <p>
+                The calculator assumes all enabled consumers may reach their
+                listed startup or peak power together. Real systems can behave
+                differently, but this simple assumption is easier to understand
+                and is intentionally cautious.
+              </p>
+            </article>
+            <article>
+              <h3>The percentage is an estimate</h3>
+              <p>
+                A consumer at 50% is treated as using half its continuous power
+                on average. A generator at 50% supplies half its rated power on
+                average. Battery percentage controls how much usable capacity is
+                available.
+              </p>
+            </article>
+            <article>
+              <h3>Always verify the result</h3>
+              <p>
+                This tool does not check cables, fuses, earthing, temperature,
+                standards, communication, BMS compatibility, or every voltage
+                and current limit. Ask a qualified professional before building
+                a system.
+              </p>
+            </article>
+          </div>
+
+          <details className="assumptions">
+            <summary>Show all calculation assumptions</summary>
+            <ul>
+              {result.assumptions.map((assumption) => (
+                <li key={assumption}>{assumption}</li>
+              ))}
+            </ul>
+          </details>
+        </section>
+
+        <section id="community" className="community">
+          <p className="kicker">Built by the community</p>
+          <h2>Help improve the component data</h2>
+          <p>
+            Found a missing device or incorrect value? Submit a public source
+            and leave unknown values empty. Every contribution must be reviewed
+            by a person before it is merged.
+          </p>
+          {repository ? (
+            <div>
+              <a
+                className="primary-link"
+                href={`${repositoryUrl}/issues/new?template=add-component.yml`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Suggest a component
+              </a>
+              <a href={repositoryUrl} target="_blank" rel="noreferrer">
+                View source code
+              </a>
+            </div>
+          ) : (
+            <p>
+              Repository links become active when
+              <code> VITE_GITHUB_REPOSITORY </code> is configured.
+            </p>
+          )}
+        </section>
+      </main>
+
+      <footer>
+        Community Energy Calculator · No accounts · No tracking · Data stays in
+        your browser
+      </footer>
+    </div>
+  )
 }
 
-function Metric({label,value,alert=false}:{label:string,value:string,alert?:boolean}) { return <div className={`metric ${alert?'alert':''}`}><small>{label}</small><strong>{value}</strong></div> }
-function Chart({title,option,wide=false}:{title:string;option:object;wide?:boolean}) { return <div className={`chart panel ${wide?'wide':''}`}><h3>{title}</h3><ReactECharts option={option} style={{height:280}} notMerge lazyUpdate/></div> }
-function Documentation({repository}:{repository:string}) {
-  return <section id="documentation" className="documentation">
-    <div className="docs-intro section">
-      <span className="step">03 · DOCUMENTATION</span>
-      <h2>What this website can do – and what it cannot</h2>
-      <p>This guide is written for everyone, including people without an electrical engineering background. It explains the calculator's purpose, how to use it, what the results mean, and where the calculation stops.</p>
-    </div>
-    <div className="docs-warning section" role="alert">
-      <AlertTriangle size={28}/>
-      <div><strong>Important safety notice: this is only a rough preliminary check</strong><p>The website only makes a broad comparison of the entered voltages, currents, power ratings, and energy quantities. It does not replace electrical planning, system design, testing, installation, or approval by a qualified professional. Never rely on this website's result alone.</p></div>
-    </div>
-    <div className="docs-layout section">
-      <aside className="docs-nav panel" aria-label="Documentation contents"><strong>On this page</strong><a href="#docs-purpose">Purpose and audience</a><a href="#docs-basics">Basic terms</a><a href="#docs-usage">Step by step</a><a href="#docs-checks">What is checked?</a><a href="#docs-results">Understanding results</a><a href="#docs-limits">Limits and liability</a><a href="#docs-support">Support the project</a></aside>
-      <div className="docs-content">
-        <article id="docs-purpose" className="docs-article">
-          <span className="docs-number">01</span><h3>Purpose and intended audience</h3>
-          <p>The Island Energy System Calculator helps you form an initial idea of a small off-grid energy system. You can combine generators, consumers, batteries, and converters, then see how generation, consumption, and battery charge may develop over a selected period.</p>
-          <h4>Who may find it useful?</h4>
-          <ul><li>Individuals roughly planning an off-grid system for a garden shed, cabin, boat, or mobile use.</li><li>Students, teachers, and learners who want to understand energy flows visually.</li><li>Clubs, community initiatives, and project groups comparing ideas and collecting requirements.</li><li>Professionals who need a quick plausibility check or a simple visual discussion aid.</li></ul>
-          <p>The application is intended for early concept work. It is <strong>not proof of correct design, safe installation, or electrical safety</strong>, and it is not a purchasing recommendation.</p>
-        </article>
-
-        <article id="docs-basics" className="docs-article">
-          <span className="docs-number">02</span><h3>The most important terms in plain language</h3>
-          <div className="definition-grid"><div><strong>Power (W)</strong><p>Describes how much electrical power a device needs or supplies at a particular moment. While running, a 500 W load needs roughly five times as much power as a 100 W load.</p></div><div><strong>Energy (Wh / kWh)</strong><p>Describes the amount consumed or generated over time. A 500 W device running for two hours uses 1,000 Wh, which is 1 kWh.</p></div><div><strong>Voltage (V)</strong><p>Devices must be intended for the voltage at their connection. Similar-looking power ratings do not automatically mean that two devices may be connected.</p></div><div><strong>Current (A)</strong><p>In a simple estimate, current is power divided by voltage. Cables, fuses, batteries, and converters all have current limits.</p></div><div><strong>SOC (%)</strong><p>“State of charge” is the estimated battery charge level. 100% means full; the configured lower limit marks the lowest discharge allowed by this model.</p></div><div><strong>Efficiency</strong><p>Every conversion loses some energy as heat. At 90% efficiency, approximately 900 Wh of 1,000 Wh is passed on as usable energy.</p></div></div>
-        </article>
-
-        <article id="docs-usage" className="docs-article">
-          <span className="docs-number">03</span><h3>How to use the calculator</h3>
-          <ol className="docs-steps"><li><strong>Select components.</strong><span>Search the library for generators, storage, converters, charge controllers, and consumers. Open the details, read the notes and sources, and add suitable entries.</span></li><li><strong>Set quantities and usage.</strong><span>Enter how many devices you have. Consumers can run continuously, within a time window, for a daily duration, or with a duty cycle. Generators use a simplified production profile.</span></li><li><strong>Configure the simulation.</strong><span>Choose the duration, time resolution, and initial battery charge. A finer resolution creates more calculation steps, but it does not make the input data more accurate.</span></li><li><strong>Read every warning.</strong><span>Check the overall status first, followed by each compatibility message. Grey means missing information, yellow means uncertainty or a limitation, and red means a detected exceedance.</span></li><li><strong>Review results critically.</strong><span>Compare every value with the latest original datasheet. Vary runtimes, generation, and starting charge to explore both favourable and unfavourable cases.</span></li><li><strong>Save the configuration.</strong><span>Export your setup as a JSON file. Import checks its format and component references, but the file is not a technical certificate or design document.</span></li></ol>
-        </article>
-
-        <article id="docs-checks" className="docs-article">
-          <span className="docs-number">04</span><h3>What is checked at a basic level?</h3>
-          <p>The calculator compares the numerical values that are available. For example, it may detect that the combined load is above an inverter's stated continuous output, or that a battery voltage lies outside a stated input range.</p>
-          <div className="check-grid"><div><CheckCircle2/><span><strong>Voltage ranges</strong>Nominal values and limits of selected components are compared approximately.</span></div><div><CheckCircle2/><span><strong>Continuous power</strong>Loads active at the same time are added and compared with known power limits.</span></div><div><CheckCircle2/><span><strong>Startup and peak power</strong>A simplified worst single-device startup is compared with peak power and peak duration.</span></div><div><CheckCircle2/><span><strong>Current limits</strong>Known generator, controller, and battery limits are compared with simplified calculated currents.</span></div><div><CheckCircle2/><span><strong>Energy balance</strong>Generation, demand, conversion losses, battery charging, and unmet demand are balanced for each time step.</span></div><div><CheckCircle2/><span><strong>Battery charge</strong>The model respects configured SOC limits and reports energy that cannot be stored or supplied.</span></div></div>
-          <div className="plain-note"><Info size={20}/><p><strong>“Compatible” only means this:</strong> the small set of numbers compared by the model did not show an obvious exceedance. It does not mean that the devices can be connected safely, comply with standards, or will work reliably together in practice.</p></div>
-        </article>
-
-        <article id="docs-results" className="docs-article">
-          <span className="docs-number">05</span><h3>Understanding results and colours</h3>
-          <div className="status-guide"><div><i className="compatible"/><strong>Green</strong><span>The available values pass the relevant rough comparison.</span></div><div><i className="marginal"/><strong>Yellow</strong><span>There are limitations, assumptions, narrow margins, or uncertainty.</span></div><div><i className="incompatible"/><strong>Red</strong><span>At least one known limit is exceeded in the simplified model.</span></div><div><i className="unknown"/><strong>Grey</strong><span>Important data is missing. You must not infer compatibility from this.</span></div></div>
-          <p>The charts show modelled values, not measurements. “Unmet energy” is demand that could not be supplied. “Curtailed generation” is potential generation that could neither be consumed nor stored. Enough calculated daily energy does not automatically prevent short overloads.</p>
-          <p>Try several scenarios: less sun or wind, longer device runtimes, a lower starting charge, and higher startup loads. A robust system must consider a realistic unfavourable case, not just an average day.</p>
-        </article>
-
-        <article id="docs-limits" className="docs-article critical-docs">
-          <span className="docs-number">06</span><h3>Limitations, personal responsibility, and liability</h3>
-          <p><strong>No guarantee or assurance is given for completeness, accuracy, currency, functionality, or fitness for any particular purpose.</strong> Software, formulas, example data, source material, and user input may be incorrect, incomplete, outdated, or misleading. Software defects are always possible.</p>
-          <p>In particular, the current version does <strong>not fully check</strong>:</p>
-          <ul><li>wire sizes, cable lengths, voltage drop, connectors, fuses, circuit breakers, or earthing,</li><li>short-circuit behaviour, disconnection conditions, selectivity, insulation coordination, or protection against electric shock,</li><li>manufacturer approvals, communication protocols, BMS compatibility, or permitted firmware combinations,</li><li>temperature, cooling, installation location, moisture, ageing, wear, or manufacturing tolerances,</li><li>standards, laws, permits, fire protection, EMC, grid rules, or insurance requirements,</li><li>complex wiring, multiple phases, series or parallel connections, control dynamics, or real startup behaviour,</li><li>site-specific weather, solar, or wind data, shading, or seasonal variation.</li></ul>
-          <div className="verification-list"><strong>Before purchasing, assembling, or operating anything, you must:</strong><span>1. verify every value against the latest original datasheet for the exact device variant,</span><span>2. have the circuit diagram, protection concept, cabling, and operating conditions designed completely,</span><span>3. follow local regulations and all manufacturer instructions, and</span><span>4. involve a qualified electrician or other suitably qualified system designer.</span></div>
-          <p>Work on electrical equipment can cause electric shock, arc flash, fire, property damage, serious injury, or death. If you do not fully understand a value or warning, do not build the system. Ask a qualified professional for help.</p>
-        </article>
-
-        <article id="docs-support" className="docs-article">
-          <span className="docs-number">07</span><h3>How you can support the project</h3>
-          <p>This is an open project built on traceable data, understandable documentation, and careful review. You can help even if you do not write software.</p>
-          <div className="support-grid"><div><Plus/><h4>Suggest a component</h4><p>Submit a device through the structured form. Include at least one publicly verifiable source and leave unknown values empty.</p><a href={`https://github.com/${repository}/issues/new?template=add-component.yml`} target="_blank">Add a component <ExternalLink size={13}/></a></div><div><AlertTriangle/><h4>Report a problem</h4><p>Report incorrect values, unclear wording, or calculation errors. Include the component ID, an example configuration, and a source where possible.</p><a href={`https://github.com/${repository}/issues/new`} target="_blank">Report an issue <ExternalLink size={13}/></a></div><div><Github/><h4>Contribute code</h4><p>You can improve tests, translations, accessibility, calculations, documentation, or usability. Changes are reviewed as pull requests.</p><a href={`https://github.com/${repository}`} target="_blank">Open the repository <ExternalLink size={13}/></a></div></div>
-          <h4>A useful contribution includes</h4><ul><li>a clear description of the problem or device,</li><li>reproducible steps and an exported example configuration when reporting a bug,</li><li>publicly verifiable original sources for technical values,</li><li>correct units and missing values clearly marked as unknown, and</li><li>no confidential, proprietary, or personal information.</li></ul>
-          <p>Every automatically generated data contribution must be reviewed by a person before merging. Contributions are never published or merged automatically.</p>
-        </article>
-      </div>
-    </div>
-  </section>
-}
-function SelectedCard({entry,component,update,remove}:{entry:SelectedComponent;component:Component;update:(id:string,p:Partial<SelectedComponent>)=>void;remove:(id:string)=>void}) {
-  const setUsage=(usage:unknown)=>update(entry.instanceId,{usage:usage as Usage})
-  const modes = component.roles.includes('generator') ? [['production','Production profile']] : component.roles.includes('consumer') ? [['always','Always active'],['time_window','Time window'],['duration','Daily runtime'],['duty_cycle','Duty cycle']] : [['always','Always connected']]
-  return <article className="selected-card"><div className="selected-head"><span className="role-dot" style={{background:categoryCopy[component.category].color}}/><div><strong>{component.name}</strong><small>{essentialRating(component)}</small></div><label className="quantity">×<input type="number" min="1" max="99" value={entry.quantity} onChange={(e)=>update(entry.instanceId,{quantity:Math.max(1,Number(e.target.value))})}/></label><button className="icon-button remove" onClick={()=>remove(entry.instanceId)}><Trash2 size={15}/></button></div><div className="schedule"><select value={entry.usage.mode} onChange={(e)=>{const mode=e.target.value; setUsage(mode==='always'?{mode:'always'}:mode==='time_window'?{mode:'time_window',start:'18:00',end:'23:00',daysOfWeek:[...days]}:mode==='duration'?{mode:'duration',hoursPerDay:5,activationsPerDay:1}:mode==='duty_cycle'?{mode:'duty_cycle',dutyCyclePercent:35,startupEventsPerHour:2}:{mode:'production',capacityFactorPercent:25})}}>{modes.map(([value,label])=><option value={value} key={value}>{label}</option>)}</select>{entry.usage.mode==='time_window'&&<><input type="time" value={entry.usage.start} onChange={(e)=>setUsage({...entry.usage,start:e.target.value} as Usage)}/><span>to</span><input type="time" value={entry.usage.end} onChange={(e)=>setUsage({...entry.usage,end:e.target.value} as Usage)}/><div className="days">{days.map((day)=><button key={day} className={entry.usage.mode==='time_window'&&entry.usage.daysOfWeek.includes(day)?'active':''} onClick={()=>entry.usage.mode==='time_window'&&setUsage({...entry.usage,daysOfWeek:entry.usage.daysOfWeek.includes(day)?entry.usage.daysOfWeek.filter((x)=>x!==day):[...entry.usage.daysOfWeek,day]})}>{dayLabels[day]}</button>)}</div></>}{entry.usage.mode==='duration'&&<label><input type="number" min="0" max="24" step=".5" value={entry.usage.hoursPerDay} onChange={(e)=>setUsage({...entry.usage,hoursPerDay:Number(e.target.value)})}/> h/day</label>}{entry.usage.mode==='duty_cycle'&&<label><input type="number" min="0" max="100" value={entry.usage.dutyCyclePercent} onChange={(e)=>setUsage({...entry.usage,dutyCyclePercent:Number(e.target.value)})}/> % active</label>}{entry.usage.mode==='production'&&<label><input type="number" min="0" max="100" value={entry.usage.capacityFactorPercent} onChange={(e)=>setUsage({...entry.usage,capacityFactorPercent:Number(e.target.value)})}/> % output</label>}</div></article>
-}
 export default App

@@ -1,126 +1,179 @@
 name: Add a component
-description: Propose a source-backed device for the public component catalogue.
-title: "[Component]: "
-labels: ["component submission", "needs review"]
+description: Suggest a device for the public component list.
+title: '[Component]: '
+labels: ['component submission', 'needs review']
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for contributing. Unknown values must be left empty, never guessed. At least one source URL is mandatory.
+        Thank you for helping. Copy values from a public datasheet or manual.
+        Enter numbers only in the requested unit. Leave unknown values empty instead of guessing.
+
   - type: dropdown
     id: role
     attributes:
       label: Component role
-      options: [generator, consumer, storage, converter]
-    validations: { required: true }
+      options:
+        - consumer
+        - generator
+        - storage
+        - converter
+    validations:
+      required: true
+
   - type: input
     id: subtype
     attributes:
       label: Component subtype
-      description: For example refrigerator, pv, battery, or dc_ac_inverter.
-    validations: { required: true }
+      description: For example refrigerator, solar panel, battery, or dc_ac_inverter.
+    validations:
+      required: true
+
   - type: input
     id: manufacturer
-    attributes: { label: Manufacturer }
-    validations: { required: true }
+    attributes:
+      label: Manufacturer
+    validations:
+      required: true
+
   - type: input
     id: model
-    attributes: { label: Model }
-    validations: { required: true }
+    attributes:
+      label: Model
+    validations:
+      required: true
+
   - type: input
     id: name
-    attributes: { label: Readable name }
-    validations: { required: true }
+    attributes:
+      label: Readable name
+      placeholder: Example 100 W refrigerator
+    validations:
+      required: true
+
   - type: textarea
     id: description
-    attributes: { label: Description }
+    attributes:
+      label: Short description
+
   - type: markdown
-    attributes: { value: "## Source" }
+    attributes:
+      value: |
+        ## Source
+        At least one public source is required.
+
   - type: dropdown
     id: source_type
     attributes:
       label: Source type
-      options: [manufacturer_datasheet, manufacturer_product_page, official_manual, certification_document, scientific_publication, measurement]
-    validations: { required: true }
+      options:
+        - manufacturer_datasheet
+        - manufacturer_product_page
+        - official_manual
+        - certification_document
+        - scientific_publication
+        - measurement
+    validations:
+      required: true
+
   - type: input
     id: source_title
-    attributes: { label: Source title }
-    validations: { required: true }
+    attributes:
+      label: Source title
+    validations:
+      required: true
+
   - type: input
     id: source_url
-    attributes: { label: Source URL, placeholder: "https://…" }
-    validations: { required: true }
-  - type: input
-    id: source_page
-    attributes: { label: Page number }
+    attributes:
+      label: Source URL
+      placeholder: https://example.com/datasheet.pdf
+    validations:
+      required: true
+
   - type: input
     id: accessed
-    attributes: { label: Date accessed, placeholder: "YYYY-MM-DD" }
-    validations: { required: true }
-  - type: textarea
-    id: source_notes
-    attributes: { label: Source notes }
+    attributes:
+      label: Date accessed
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+
   - type: markdown
     attributes:
       value: |
-        ## General electrical information
-        Enter a number and unit. Leave unknown values empty.
+        ## Basic electrical values
+        Fill in only the values that apply to this device.
+        Enter numbers only, for example `48` or `12.5`. Do not type the unit into the field.
+
   - type: input
     id: voltage
-    attributes: { label: Nominal voltage }
+    attributes:
+      label: Nominal or output voltage (V)
+      description: 'Enter volts. Example: 48 or 230.'
+
   - type: input
-    id: current
-    attributes: { label: Nominal current }
+    id: min_voltage
+    attributes:
+      label: Minimum input voltage (V)
+      description: Mainly for inverters and converters.
+
   - type: input
-    id: rated_power
-    attributes: { label: Rated power }
+    id: max_voltage
+    attributes:
+      label: Maximum input voltage (V)
+      description: Mainly for inverters and converters.
+
   - type: input
-    id: continuous_power
-    attributes: { label: Continuous power }
+    id: power
+    attributes:
+      label: Rated or continuous power (W)
+      description: 'Enter watts. Example: 500.'
+
   - type: input
     id: peak_power
-    attributes: { label: Startup / peak power }
+    attributes:
+      label: Startup or peak power (W)
+      description: Enter watts. Leave empty if the source does not provide it.
+
   - type: input
     id: peak_duration
-    attributes: { label: Startup / peak duration }
+    attributes:
+      label: Peak duration (seconds)
+
   - type: input
-    id: current_type
-    attributes: { label: AC or DC }
+    id: capacity
+    attributes:
+      label: Usable battery capacity (Wh)
+      description: Storage only. Enter watt-hours, not amp-hours.
+
   - type: input
-    id: frequency
-    attributes: { label: Frequency }
-  - type: textarea
-    id: consumer
+    id: battery_power
     attributes:
-      label: Consumer-specific values
-      description: Standby power, daily energy, energy/cycle, runtime, power factor.
-  - type: textarea
-    id: generator
+      label: Maximum continuous battery output (W)
+      description: Storage only.
+
+  - type: input
+    id: efficiency
     attributes:
-      label: Generator-specific values
-      description: Open-circuit voltage, short-circuit current, generator type, power curve.
+      label: Efficiency (%)
+      description: 'Example: enter 93 for 93%.'
+
   - type: textarea
-    id: storage
+    id: notes
     attributes:
-      label: Storage-specific values
-      description: Chemistry, min/max voltage, nominal/usable capacity, charge/discharge and peak limits, efficiencies.
-  - type: textarea
-    id: converter
-    attributes:
-      label: Converter-specific values
-      description: Type, input range/current, output voltage/current, power limits, efficiency, standby, MPPT range.
+      label: Additional notes
+
   - type: checkboxes
     id: confirmations
     attributes:
-      label: Final confirmation
+      label: Confirmation
       options:
-        - label: I provided at least one source that is publicly accessible where possible.
+        - label: I provided a public source.
           required: true
-        - label: I checked the values and units.
+        - label: I checked every value and unit.
           required: true
-        - label: Unknown values were left empty instead of guessed.
+        - label: I left unknown values empty instead of guessing.
           required: true
-        - label: I understand that the data will be publicly visible and contains no confidential information.
-          required: true
-        - label: I agree that the contribution may be edited during review.
+        - label: I understand that this public contribution will be reviewed and may be edited.
           required: true

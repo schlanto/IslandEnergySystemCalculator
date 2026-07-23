@@ -1,20 +1,53 @@
 # Component data model
 
-Every component is a standalone JSON document conforming to `schemas/component.schema.json` plus its role schema. Common required fields are schema version, unique ID, manufacturer, model, readable name, category, roles, description, electrical and operation objects, sources, notes, and data quality.
+Every physical component is stored in one separate JSON file. Files conform to `schemas/component.schema.json` and one role-specific schema.
 
-## Common conventions
+## Roles
 
-- SI-derived units are encoded in field names: `W`, `Wh`, `V`, `A`, `Hz`, and seconds.
-- Efficiencies are fractions from 0 to 1; percentages are 0 to 100.
-- Unknown technical values are `null`; absent optional concepts may be omitted.
-- `sources` must contain at least one URI and access date.
-- IDs match `^[a-z0-9]+(?:-[a-z0-9]+)*$`.
+- `consumer`: a device that uses electrical power;
+- `generator`: a solar panel, wind turbine, or other source;
+- `storage`: a battery or other energy store;
+- `converter`: an inverter, charge controller, or other converter.
 
-## Role examples
+## Essential fields
 
-- Consumer: `data/consumers/generic-refrigerator.json` demonstrates continuous/startup power and daily energy.
-- Generator: `data/generators/generic-pv-module-450w.json` demonstrates PV operating and open-circuit ratings.
-- Storage: `data/storage/generic-lifepo4-battery-5kwh.json` demonstrates capacity, current/power limits, and efficiency.
-- Converter: `data/converters/generic-inverter-3kw.json` demonstrates typed ports, continuous/peak power, and an efficiency curve.
+Every component contains:
 
-Schedules do not belong in component files. Exported system configurations reference immutable component IDs and keep quantity, usage mode, simulation duration/resolution, SOC limits, and visible assumptions separately.
+- schema version and unique lowercase ID;
+- manufacturer, model, and readable name;
+- category and role;
+- electrical and operating values;
+- at least one public source;
+- notes and data-quality information.
+
+Units are included in field names:
+
+- `PowerW`: watts;
+- `CapacityWh`: watt-hours;
+- `VoltageV`: volts;
+- `CurrentA`: amperes;
+- `DurationSeconds`: seconds.
+
+Unknown technical values use `null` or are omitted. They must not be silently replaced with guessed values.
+
+## User selection
+
+User-specific settings remain separate from component data:
+
+```json
+{
+  "componentId": "generic-refrigerator-90w",
+  "quantity": 1,
+  "enabled": true,
+  "operatingPercent": 50
+}
+```
+
+The browser stores this small selection locally. There are no schedules, time-resolution settings, user accounts, or server-side storage.
+
+## Examples
+
+- Consumer: `data/consumers/generic-refrigerator.json`
+- Generator: `data/generators/generic-pv-module-450w.json`
+- Storage: `data/storage/generic-lifepo4-battery-5kwh.json`
+- Converter: `data/converters/generic-inverter-3kw.json`
