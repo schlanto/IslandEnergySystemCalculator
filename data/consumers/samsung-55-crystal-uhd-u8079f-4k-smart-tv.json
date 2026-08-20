@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "1.0",
+  "id": "samsung-55-crystal-uhd-u8079f-4k-smart-tv",
+  "manufacturer": "Samsung",
+  "model": "55\" Crystal UHD U8079F 4K Smart TV",
+  "name": "Samsung 55\" Crystal UHD U8079F 4K Smart TV",
+  "category": "consumer",
+  "roles": [
+    "consumer"
+  ],
+  "description": "",
+  "electrical": {
+    "nominalVoltageV": null,
+    "continuousPowerW": 160,
+    "startupPowerW": 160,
+    "startupDurationSeconds": null,
+    "inputType": "ac"
+  },
+  "operation": {},
+  "sources": [
+    {
+      "type": "manufacturer_product_page",
+      "title": "Website",
+      "url": "https://www.samsung.com/de/tvs/uhd-4k-tv/u8079f-55-inch-crystal-uhd-4k-smart-tv-gu55u8079fuxzg/",
+      "accessed": "2026-07-23"
+    }
+  ],
+  "notes": [
+    "Generated from a community issue; technical review required."
+  ],
+  "dataQuality": {
+    "level": "manufacturer_specification",
+    "confidence": "medium"
+  },
+  "consumerType": "TV"
+}
