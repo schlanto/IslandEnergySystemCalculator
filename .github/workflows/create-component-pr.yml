@@ -8,7 +8,12 @@ permissions:
   issues: write
 jobs:
   create:
-    if: contains(github.event.issue.labels.*.name, 'component submission')
+    # Issue Form labels are only applied when the configured label already
+    # exists in the repository. Use the form's title prefix as a fallback so
+    # a valid component submission is not skipped when that label is missing.
+    if: >-
+      contains(github.event.issue.labels.*.name, 'component submission') ||
+      startsWith(github.event.issue.title, '[Component]:')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

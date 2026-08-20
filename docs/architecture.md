@@ -1137,7 +1137,10 @@ Target filename:
 
 `.github/workflows/create-component-pr.yml` runs when an issue is opened.
 
-The job runs only when the issue has the `component submission` label.
+The job runs when the issue has the `component submission` label or its title
+starts with the Issue Form prefix `[Component]:`. The title fallback is needed
+because GitHub only applies Issue Form labels that already exist in the
+repository; a missing label must not cause a valid submission to be skipped.
 
 Steps:
 
