@@ -1,7 +1,7 @@
 name: Create component pull request
 on:
   issues:
-    types: [opened]
+    types: [opened, reopened]
 permissions:
   contents: write
   pull-requests: write

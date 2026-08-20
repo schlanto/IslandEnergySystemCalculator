@@ -1135,7 +1135,9 @@ Target filename:
 
 ## 35. Automated issue-to-pull-request workflow
 
-`.github/workflows/create-component-pr.yml` runs when an issue is opened.
+`.github/workflows/create-component-pr.yml` runs when an issue is opened or
+reopened. Closing and reopening an older component issue therefore processes it
+with the current workflow version.
 
 The job runs when the issue has the `component submission` label or its title
 starts with the Issue Form prefix `[Component]:`. The title fallback is needed
